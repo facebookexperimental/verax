@@ -106,7 +106,7 @@ class ToTextVisitor : public PlanNodeVisitor {
         fmt::format("Join {}", JoinTypeName::toName(node.joinType())),
         node,
         node.condition() != nullptr ? ExprPrinter::toText(*node.condition())
-                                    : "",
+                                    : "cross join",
         context);
   }
 
