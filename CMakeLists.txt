@@ -103,6 +103,17 @@ endif()
 message("Setting CMAKE_CXX_FLAGS=${SCRIPT_CXX_FLAGS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SCRIPT_CXX_FLAGS}")
 
+# On some platforms (especially ARM), we need to link with libatomic for std::atomic
+if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+  # For Linux, explicitly link with libatomic
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -latomic")
+  # Also set an environment variable that Folly's CMake might check
+  set(ENV{LDFLAGS} "$ENV{LDFLAGS} -latomic")
+elseif(APPLE)
+  # On macOS, libatomic is part of the standard library, but we need to explicitly link it
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -latomic")
+endif()
+
 message("FINAL CMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}")
 
 include(CTest) # include after project() but before add_subdirectory()
@@ -116,7 +127,7 @@ velox_resolve_dependency(glog)
 velox_set_source(gflags)
 velox_resolve_dependency(gflags COMPONENTS shared)
 
-set(BOOST_INCLUDE_LIBRARIES algorithm context filesystem program_options)
+set(BOOST_INCLUDE_LIBRARIES context filesystem program_options)
 
 velox_set_source(Boost)
 velox_resolve_dependency(Boost 1.77.0 COMPONENTS ${BOOST_INCLUDE_LIBRARIES})

@@ -18,16 +18,16 @@ on:
   push:
     branches: [main]
     paths:
-      - 'logical_plan/**'
-      - 'optimizer/**'
-      - 'public_tld/**'
+      - 'axiom/logical_plan/**'
+      - 'axiom/optimizer/**'
+      - 'axiom/public_tld/**'
       - '.github/workflows/test.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'logical_plan/**'
-      - 'optimizer/**'
-      - 'public_tld/**'
+      - 'axiom/logical_plan/**'
+      - 'axiom/optimizer/**'
+      - 'axiom/public_tld/**'
       - '.github/workflows/test.yml'
 
 permissions:
@@ -78,20 +78,47 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-          submodules: 'recursive'
+          submodules: recursive
+
+      - name: Verify submodules
+        run: |
+          echo "Verifying submodules were properly initialized..."
+
+          # Check if the Velox submodule was initialized correctly
+          if [ -d "velox/CMake" ]; then
+            echo "Velox submodule properly initialized"
+          else
+            echo "::error::Failed to initialize Velox submodule with recursive checkout"
+            echo "::error::Listing contents of velox directory:"
+            ls -la velox || echo "velox directory does not exist"
+            exit 1
+          fi
 
       - name: Setup ccache
         uses: actions/cache@v4
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-ubuntu-${{ hashFiles('CMakeLists.txt', 'logical_plan/**/*.cpp', 'logical_plan/**/*.h', 'optimizer/**/*.cpp', 'optimizer/**/*.h') }}
+          key: ccache-ubuntu-${{ hashFiles('CMakeLists.txt', 'axiom/logical_plan/**/*.cpp', 'axiom/logical_plan/**/*.h', 'axiom/optimizer/**/*.cpp', 'axiom/optimizer/**/*.h') }}
           restore-keys: |
             ccache-ubuntu-
 
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential ccache libboost-all-dev libgtest-dev libgoogle-glog-dev libgflags-dev libfolly-dev
+
+          # Install dependencies
+          sudo apt-get install -y cmake build-essential ccache \
+            libboost-all-dev \
+            libgtest-dev libgmock-dev libgoogle-glog-dev libgflags-dev \
+            libdouble-conversion-dev libfmt-dev libssl-dev libzstd-dev libevent-dev \
+            libsnappy-dev flex bison libatomic1
+
+          # Debug Boost installation
+          echo "Installed Boost packages:"
+          dpkg -l | grep libboost
+
+          echo "Boost include directory contents:"
+          ls -la /usr/include/boost || echo "Boost include directory not found"
 
       - name: Zero ccache statistics
         run: ccache -z
