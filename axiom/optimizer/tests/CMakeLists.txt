@@ -23,7 +23,12 @@ add_executable(
   FeatureGen.cpp
   Genies.cpp)
 
+
 add_test(velox_plan_test velox_plan_test)
+
+# Include the bundled googletest headers before system ones
+include_directories(BEFORE SYSTEM ${googletest_SOURCE_DIR}/googletest/include)
+include_directories(BEFORE SYSTEM ${googletest_SOURCE_DIR}/googlemock/include)
 
 target_link_libraries(
   velox_plan_test
@@ -37,8 +42,9 @@ target_link_libraries(
   velox_exec_test_lib
   velox_dwio_parquet_reader
   velox_dwio_native_parquet_reader
-  gtest
-  gtest_main)
+  GTest::gtest
+  GTest::gtest_main
+  GTest::gmock)
 
 add_executable(velox_sql VeloxSql.cpp)
 

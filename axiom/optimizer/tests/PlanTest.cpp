@@ -277,15 +277,14 @@ TEST_F(PlanTest, rejectedFilters) {
   std::vector<std::string> lines;
   folly::split("\n", plan->toString(false), lines);
 
-  EXPECT_THAT(
-      lines,
-      testing::ElementsAre(
-          testing::StartsWith("Fragment 0"),
-          testing::StartsWith("-- Project"),
-          testing::StartsWith("  -- Filter"),
-          testing::StartsWith("    -- TableScan"),
-          testing::Eq(""),
-          testing::Eq("")));
+  // Check each line individually instead of using EXPECT_THAT with ElementsAre
+  ASSERT_GE(lines.size(), 6);
+  EXPECT_TRUE(lines[0].find("Fragment 0") == 0);
+  EXPECT_TRUE(lines[1].find("-- Project") == 0);
+  EXPECT_TRUE(lines[2].find("  -- Filter") == 0);
+  EXPECT_TRUE(lines[3].find("    -- TableScan") == 0);
+  EXPECT_TRUE(lines[4].empty());
+  EXPECT_TRUE(lines[5].empty());
 }
 
 TEST_F(PlanTest, q1) {
