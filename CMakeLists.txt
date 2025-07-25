@@ -20,6 +20,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 add_compile_definitions(DISABLE_META_INTERNAL_COMPRESSOR=1)
+# Define Folly macros to help with __uint128_t support
+add_compile_definitions(FOLLY_HAVE_INT128_T=1)
+add_compile_definitions(FOLLY_CFG_NO_COROUTINES=1)
 
 # Sets new behavior for CMP0135, which controls how timestamps are extracted
 # when using ExternalProject_Add():
@@ -90,16 +93,32 @@ if(COMPILER_HAS_W_NULLABILITY_COMPLETENESS)
 endif()
 
 # Verax, Velox and folly need to be compiled with the same compiler flags.
-execute_process(
-  COMMAND
-    bash -c
-    "( source ${CMAKE_CURRENT_SOURCE_DIR}/velox/scripts/setup-helper-functions.sh && echo -n $(get_cxx_flags $ENV{CPU_TARGET}))"
-  OUTPUT_VARIABLE SCRIPT_CXX_FLAGS
-  RESULT_VARIABLE COMMAND_STATUS)
+# For GitHub Actions, we'll use a fixed set of flags instead of trying to determine them
+if(DEFINED ENV{GITHUB_ACTIONS})
+  message(STATUS "Running in GitHub Actions, using default compiler flags")
+  # Set default flags for x86_64 architecture in GitHub Actions
+  set(SCRIPT_CXX_FLAGS "-march=x86-64")
+else()
+  # For local builds, try to determine the flags
+  execute_process(
+    COMMAND
+      bash -c
+      "( source ${CMAKE_CURRENT_SOURCE_DIR}/velox/scripts/setup-helper-functions.sh && echo -n $(get_cxx_flags $ENV{CPU_TARGET}))"
+    OUTPUT_VARIABLE SCRIPT_CXX_FLAGS
+    RESULT_VARIABLE COMMAND_STATUS)
 
-if(COMMAND_STATUS EQUAL "1")
-  message(FATAL_ERROR "Unable to determine compiler flags!")
+  if(COMMAND_STATUS EQUAL "1")
+    message(FATAL_ERROR "Unable to determine compiler flags!")
+  endif()
+
+  # Check if the output contains "Architecture not supported"
+  if(SCRIPT_CXX_FLAGS MATCHES "Architecture not supported")
+    message(WARNING "Architecture not supported by get_cxx_flags, using default flags")
+    # Set default flags for the current architecture
+    set(SCRIPT_CXX_FLAGS "")
+  endif()
 endif()
+
 message("Setting CMAKE_CXX_FLAGS=${SCRIPT_CXX_FLAGS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SCRIPT_CXX_FLAGS}")
 
@@ -116,7 +135,7 @@ velox_resolve_dependency(glog)
 velox_set_source(gflags)
 velox_resolve_dependency(gflags COMPONENTS shared)
 
-set(BOOST_INCLUDE_LIBRARIES algorithm context filesystem program_options)
+set(BOOST_INCLUDE_LIBRARIES context filesystem program_options)
 
 velox_set_source(Boost)
 velox_resolve_dependency(Boost 1.77.0 COMPONENTS ${BOOST_INCLUDE_LIBRARIES})
