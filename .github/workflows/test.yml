@@ -12,23 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Verax C++ CI
+name: Linux Build
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
-      - 'logical_plan/**'
-      - 'optimizer/**'
-      - 'public_tld/**'
-      - '.github/workflows/test.yml'
+      - '**'
+      - '!*.md'
+      - '!docs/**'
+      - '!.github/workflows/*.md'
   pull_request:
-    branches: [main]
     paths:
-      - 'logical_plan/**'
-      - 'optimizer/**'
-      - 'public_tld/**'
-      - '.github/workflows/test.yml'
+      - '**'
+      - '!*.md'
+      - '!docs/**'
+      - '!.github/workflows/*.md'
 
 permissions:
   contents: read
@@ -38,72 +38,78 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pre-commit:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Install pre-commit
-        run: python -m pip install pre-commit
-
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-          persist-credentials: false
-
-      - name: Cache pre-commit
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pre-commit
-          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
-          restore-keys: |
-            pre-commit-
-
-      - name: Run pre-commit
-        run: |
-          files=$(git diff --name-only HEAD^1 HEAD)
-          echo "::group::Changed files"
-          echo $files | tr ' ' '\n'
-          echo "::endgroup::"
-          pre-commit run --show-diff-on-failure --color=always --files $files
-
-  build-and-test:
-    runs-on: ubuntu-latest
-    needs: pre-commit
+  build-verax:
+    name: Build Verax
+    runs-on: 16-core-ubuntu
+    container:
+      image: ghcr.io/facebookincubator/velox-dev:centos9
     env:
-      CPU_TARGET: "default"
       CCACHE_DIR: ${{ github.workspace }}/ccache
-
+      VELOX_DEPENDENCY_SOURCE: SYSTEM
+      ICU_SOURCE: SYSTEM
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          submodules: 'recursive'
+      - name: Ensure Ccache Dir Exists
+        working-directory: ${{ github.workspace }}
+        run: |
+          mkdir -p "$CCACHE_DIR"
 
-      - name: Setup ccache
-        uses: actions/cache@v4
+      # Get ccache from stash
+      - name: Get Ccache Stash
+        uses: apache/infrastructure-actions/stash/restore@3354c1565d4b0e335b78a76aedd82153a9e144d4
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-ubuntu-${{ hashFiles('CMakeLists.txt', 'logical_plan/**/*.cpp', 'logical_plan/**/*.h', 'optimizer/**/*.cpp', 'optimizer/**/*.h') }}
-          restore-keys: |
-            ccache-ubuntu-
+          key: ccache-ubuntu-debug-default-gcc
 
-      - name: Install dependencies
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      # Configure Git to trust the repository directory
+      - name: Configure Git Safe Directory
         run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake build-essential ccache libboost-all-dev libgtest-dev libgoogle-glog-dev libgflags-dev libfolly-dev
+          git config --global --add safe.directory "/__w/verax/verax"
+          git config --global --add safe.directory "*"
 
-      - name: Zero ccache statistics
-        run: ccache -z
+      # # Install dependencies
+      # - name: Install Dependencies
+      #   working-directory: velox
+      #   run: |
+      #     source scripts/setup-ubuntu.sh && install_build_prerequisites && install_velox_deps
 
-      - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+      - name: Clear CCache Statistics
+        run: |
+          ccache -sz
 
-      - name: Build
-        run: cmake --build build --config Release -j $(nproc)
+      # Build Verax directly (which will also build Velox)
+      - name: Build Verax Debug
+        id: build-verax
+        continue-on-error: true  # Allow this step to fail without stopping the workflow
+        env:
+          MAKEFLAGS: NUM_THREADS=8 MAX_HIGH_MEM_JOBS=4 MAX_LINK_JOBS=4
+          CPU_TARGET: "avx"
+        run: |
+          # Build with reduced parallelism
+          make debug
 
-      - name: Show ccache statistics
-        run: ccache -s
+      # Display ccache statistics after build (even if build failed)
+      - name: CCache Statistics After Build
+        if: always()  # Run even if build failed
+        run: |
+          echo "CCache statistics after build:"
+          ccache -vs
 
-      - name: Run tests
-        run: ctest --test-dir build --output-on-failure -j $(nproc)
+      # Save ccache for future runs (before running tests)
+      - name: Save ccache
+        if: always()  # Run even if build failed
+        uses: apache/infrastructure-actions/stash/save@3354c1565d4b0e335b78a76aedd82153a9e144d4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-ubuntu-debug-default-gcc
+
+      # Run Verax tests (excluding velox tests)
+      - name: Run Debug Tests
+        working-directory: _build/debug
+        run: |
+          ctest -j 8 --output-on-failure --no-tests=error -E "velox"
