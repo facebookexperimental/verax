@@ -48,28 +48,40 @@ TEST(NameMappingsTest, basic) {
   };
 
   {
-    mappings.add("a", newName("a"));
-    mappings.add("b", newName("b"));
-    mappings.add("c", newName("c"));
+    mappings.add("a", newName("a"), BOOLEAN());
+    mappings.add("b", newName("b"), BOOLEAN());
+    mappings.add("c", newName("c"), BOOLEAN());
 
-    EXPECT_EQ(mappings.lookup("a"), "a");
-    EXPECT_EQ(mappings.lookup("b"), "b");
-    EXPECT_EQ(mappings.lookup("c"), "c");
+    EXPECT_EQ(
+        mappings.lookup("a"),
+        (NameMappings::IdAndType{.id = "a", .type = BOOLEAN()}));
+    EXPECT_EQ(
+        mappings.lookup("b"),
+        (NameMappings::IdAndType{.id = "b", .type = BOOLEAN()}));
+    EXPECT_EQ(
+        mappings.lookup("c"),
+        (NameMappings::IdAndType{.id = "c", .type = BOOLEAN()}));
 
     mappings.setAlias("t");
 
-    EXPECT_EQ(mappings.lookup("t", "a"), "a");
-    EXPECT_EQ(mappings.lookup("t", "b"), "b");
-    EXPECT_EQ(mappings.lookup("t", "c"), "c");
+    EXPECT_EQ(
+        mappings.lookup("t", "a"),
+        (NameMappings::IdAndType{.id = "a", .type = BOOLEAN()}));
+    EXPECT_EQ(
+        mappings.lookup("t", "b"),
+        (NameMappings::IdAndType{.id = "b", .type = BOOLEAN()}));
+    EXPECT_EQ(
+        mappings.lookup("t", "c"),
+        (NameMappings::IdAndType{.id = "c", .type = BOOLEAN()}));
 
     EXPECT_THAT(reverseLookup("a"), makeNamesEq({"a", "t.a"}));
     EXPECT_THAT(reverseLookup("b"), makeNamesEq({"b", "t.b"}));
     EXPECT_THAT(reverseLookup("c"), makeNamesEq({"c", "t.c"}));
 
     NameMappings other;
-    other.add("a", newName("a"));
-    other.add("c", newName("c"));
-    other.add("e", newName("e"));
+    other.add("a", newName("a"), BOOLEAN());
+    other.add("c", newName("c"), BOOLEAN());
+    other.add("e", newName("e"), BOOLEAN());
 
     mappings.merge(other);
 
@@ -77,15 +89,25 @@ TEST(NameMappingsTest, basic) {
     // accessible at all.
 
     EXPECT_EQ(mappings.lookup("a"), std::nullopt);
-    EXPECT_EQ(mappings.lookup("t", "a"), "a");
+    EXPECT_EQ(
+        mappings.lookup("t", "a"),
+        (NameMappings::IdAndType{.id = "a", .type = BOOLEAN()}));
 
-    EXPECT_EQ(mappings.lookup("b"), "b");
-    EXPECT_EQ(mappings.lookup("t", "b"), "b");
+    EXPECT_EQ(
+        mappings.lookup("b"),
+        (NameMappings::IdAndType{.id = "b", .type = BOOLEAN()}));
+    EXPECT_EQ(
+        mappings.lookup("t", "b"),
+        (NameMappings::IdAndType{.id = "b", .type = BOOLEAN()}));
 
     EXPECT_EQ(mappings.lookup("c"), std::nullopt);
-    EXPECT_EQ(mappings.lookup("t", "c"), "c");
+    EXPECT_EQ(
+        mappings.lookup("t", "c"),
+        (NameMappings::IdAndType{.id = "c", .type = BOOLEAN()}));
 
-    EXPECT_EQ(mappings.lookup("e"), "e");
+    EXPECT_EQ(
+        mappings.lookup("e"),
+        (NameMappings::IdAndType{.id = "e", .type = BOOLEAN()}));
 
     EXPECT_THAT(reverseLookup("a"), makeNamesEq({"t.a"}));
     EXPECT_THAT(reverseLookup("b"), makeNamesEq({"b", "t.b"}));
@@ -97,35 +119,51 @@ TEST(NameMappingsTest, basic) {
     allocator.reset();
     mappings.reset();
 
-    mappings.add("a", newName("a"));
-    mappings.add("b", newName("b"));
-    mappings.add("c", newName("c"));
+    mappings.add("a", newName("a"), BOOLEAN());
+    mappings.add("b", newName("b"), BOOLEAN());
+    mappings.add("c", newName("c"), BOOLEAN());
     mappings.setAlias("t");
 
     NameMappings other;
-    other.add("a", newName("a"));
-    other.add("c", newName("c"));
-    other.add("e", newName("e"));
+    other.add("a", newName("a"), BOOLEAN());
+    other.add("c", newName("c"), BOOLEAN());
+    other.add("e", newName("e"), BOOLEAN());
     other.setAlias("u");
     mappings.merge(other);
 
     // "a" and "c" are no longer accessible w/o the alias.
 
     EXPECT_EQ(mappings.lookup("a"), std::nullopt);
-    EXPECT_EQ(mappings.lookup("t", "a"), "a");
-    EXPECT_EQ(mappings.lookup("u", "a"), "a_0");
+    EXPECT_EQ(
+        mappings.lookup("t", "a"),
+        (NameMappings::IdAndType{.id = "a", .type = BOOLEAN()}));
+    EXPECT_EQ(
+        mappings.lookup("u", "a"),
+        (NameMappings::IdAndType{.id = "a_0", .type = BOOLEAN()}));
 
-    EXPECT_EQ(mappings.lookup("b"), "b");
-    EXPECT_EQ(mappings.lookup("t", "b"), "b");
+    EXPECT_EQ(
+        mappings.lookup("b"),
+        (NameMappings::IdAndType{.id = "b", .type = BOOLEAN()}));
+    EXPECT_EQ(
+        mappings.lookup("t", "b"),
+        (NameMappings::IdAndType{.id = "b", .type = BOOLEAN()}));
     EXPECT_EQ(mappings.lookup("u", "b"), std::nullopt);
 
     EXPECT_EQ(mappings.lookup("c"), std::nullopt);
-    EXPECT_EQ(mappings.lookup("t", "c"), "c");
-    EXPECT_EQ(mappings.lookup("u", "c"), "c_1");
+    EXPECT_EQ(
+        mappings.lookup("t", "c"),
+        (NameMappings::IdAndType{.id = "c", .type = BOOLEAN()}));
+    EXPECT_EQ(
+        mappings.lookup("u", "c"),
+        (NameMappings::IdAndType{.id = "c_1", .type = BOOLEAN()}));
 
-    EXPECT_EQ(mappings.lookup("e"), "e");
+    EXPECT_EQ(
+        mappings.lookup("e"),
+        (NameMappings::IdAndType{.id = "e", .type = BOOLEAN()}));
     EXPECT_EQ(mappings.lookup("t", "e"), std::nullopt);
-    EXPECT_EQ(mappings.lookup("u", "e"), "e");
+    EXPECT_EQ(
+        mappings.lookup("u", "e"),
+        (NameMappings::IdAndType{.id = "e", .type = BOOLEAN()}));
 
     EXPECT_THAT(reverseLookup("a"), makeNamesEq({"t.a"}));
     EXPECT_THAT(reverseLookup("b"), makeNamesEq({"b", "t.b"}));
@@ -140,10 +178,16 @@ TEST(NameMappingsTest, basic) {
     // Only b and e are still accessible.
 
     EXPECT_EQ(mappings.lookup("a"), std::nullopt);
-    EXPECT_EQ(mappings.lookup("b"), "b");
-    EXPECT_EQ(mappings.lookup("v", "b"), "b");
+    EXPECT_EQ(
+        mappings.lookup("b"),
+        (NameMappings::IdAndType{.id = "b", .type = BOOLEAN()}));
+    EXPECT_EQ(
+        mappings.lookup("v", "b"),
+        (NameMappings::IdAndType{.id = "b", .type = BOOLEAN()}));
     EXPECT_EQ(mappings.lookup("c"), std::nullopt);
-    EXPECT_EQ(mappings.lookup("v", "e"), "e");
+    EXPECT_EQ(
+        mappings.lookup("v", "e"),
+        (NameMappings::IdAndType{.id = "e", .type = BOOLEAN()}));
 
     EXPECT_THAT(reverseLookup("b"), makeNamesEq({"b", "v.b"}));
     EXPECT_THAT(reverseLookup("e"), makeNamesEq({"e", "v.e"}));

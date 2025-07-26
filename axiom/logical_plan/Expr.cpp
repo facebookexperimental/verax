@@ -91,6 +91,8 @@ folly::F14FastMap<SpecialForm, std::string> specialFormNames() {
       {SpecialForm::kIf, "IF"},
       {SpecialForm::kSwitch, "SWITCH"},
       {SpecialForm::kStar, "STAR"},
+      {SpecialForm::kIn, "IN"},
+      {SpecialForm::kExists, "EXISTS"},
   };
 }
 } // namespace
@@ -276,6 +278,22 @@ SpecialFormExpr::SpecialFormExpr(
       VELOX_USER_CHECK_GE(
           inputs.size(), 0, "'*' expression cannot not have any inputs");
       break;
+    case SpecialForm::kIn:
+      VELOX_USER_CHECK_EQ(
+          inputs.size(),
+          2,
+          "IN expression for subquery must have exactly two inputs");
+      VELOX_USER_CHECK(
+          inputs.at(1)->kind() == ExprKind::kSubquery,
+          "Second input to IN expression for subquery must be a subquery");
+      break;
+    case SpecialForm::kExists:
+      VELOX_USER_CHECK_EQ(
+          inputs.size(), 1, "EXISTS expression must have exactly one input");
+      VELOX_USER_CHECK(
+          inputs.at(0)->kind() == ExprKind::kSubquery,
+          "Input to EXISTS expression must be a subquery");
+      break;
   }
 }
 
@@ -319,13 +337,25 @@ folly::F14FastMap<WindowExpr::BoundType, std::string> boundTypeNames() {
 
 VELOX_DEFINE_EMBEDDED_ENUM_NAME(WindowExpr, BoundType, boundTypeNames)
 
-SubqueryExpr::SubqueryExpr(const LogicalPlanNodePtr& subquery)
-    : Expr(ExprKind::kSubquery, subquery->outputType()->childAt(0), {}),
-      subquery_{subquery} {
-  VELOX_USER_CHECK_EQ(
-      1,
-      subquery->outputType()->size(),
-      "Scalar subquery must produce exactly one column");
+SubqueryExpr::SubqueryExpr(const LogicalPlanNodePtr subquery, SubqueryType type)
+    : Expr(
+          ExprKind::kSubquery,
+          [&]() -> TypePtr {
+            if (type == SubqueryType::EXISTS) {
+              return BOOLEAN();
+            } else {
+              return subquery->outputType()->childAt(0);
+            }
+          }(),
+          {}),
+      subquery_{subquery},
+      subqueryType_{type} {
+  if (type == SubqueryType::SCALAR || type == SubqueryType::IN) {
+    VELOX_USER_CHECK_EQ(
+        1,
+        subquery->outputType()->size(),
+        "Scalar subquery must produce exactly one column");
+  }
 }
 
 } // namespace facebook::velox::logical_plan

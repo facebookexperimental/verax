@@ -31,16 +31,16 @@ PlanBuilder& PlanBuilder::values(
     std::vector<Variant> rows) {
   VELOX_USER_CHECK_NULL(node_, "Values node must be the leaf node");
 
-  outputMapping_ = std::make_shared<NameMappings>();
+  outputMapping_.push_back(std::make_shared<NameMappings>());
 
   const auto numColumns = rowType->size();
   std::vector<std::string> outputNames;
   outputNames.reserve(numColumns);
-  for (const auto& name : rowType->names()) {
-    outputNames.push_back(newName(name));
-    outputMapping_->add(name, outputNames.back());
+  for (int i = 0; i < rowType->size(); ++i) {
+    outputNames.push_back(newName(rowType->nameOf(i)));
+    outputMapping_.back()->add(
+        rowType->nameOf(i), outputNames.back(), rowType->childAt(i));
   }
-
   node_ = std::make_shared<ValuesNode>(
       nextId(), ROW(outputNames, rowType->children()), std::move(rows));
 
@@ -65,13 +65,14 @@ PlanBuilder& PlanBuilder::tableScan(
   std::vector<std::string> outputNames;
   outputNames.reserve(numColumns);
 
-  outputMapping_ = std::make_shared<NameMappings>();
+  outputMapping_.push_back(std::make_shared<NameMappings>());
 
   for (const auto& name : columnNames) {
     columnTypes.push_back(schema->findChild(name));
 
     outputNames.push_back(newName(name));
-    outputMapping_->add(name, outputNames.back());
+    outputMapping_.back()->add(
+        name, outputNames.back(), schema->findChild(name));
   }
 
   node_ = std::make_shared<TableScanNode>(
@@ -120,17 +121,17 @@ void PlanBuilder::resolveProjections(
     if (untypedExpr->alias().has_value()) {
       const auto& alias = untypedExpr->alias().value();
       outputNames.push_back(newName(alias));
-      mappings.add(alias, outputNames.back());
+      mappings.add(alias, outputNames.back(), expr->type());
     } else if (expr->isInputReference()) {
       // Identity projection
       const auto& id = expr->asUnchecked<InputReferenceExpr>()->name();
       outputNames.push_back(id);
 
-      const auto names = outputMapping_->reverseLookup(id);
+      auto names = reverseLookup(id);
       VELOX_USER_CHECK(!names.empty());
 
       for (const auto& name : names) {
-        mappings.add(name, id);
+        mappings.add(name, id, expr->type());
       }
     } else {
       outputNames.push_back(newName("expr"));
@@ -154,7 +155,7 @@ PlanBuilder& PlanBuilder::project(const std::vector<std::string>& projections) {
   resolveProjections(projections, outputNames, exprs, *newOutputMapping);
 
   node_ = std::make_shared<ProjectNode>(nextId(), node_, outputNames, exprs);
-  outputMapping_ = newOutputMapping;
+  outputMapping_.back() = newOutputMapping;
 
   return *this;
 }
@@ -177,9 +178,9 @@ PlanBuilder& PlanBuilder::with(const std::vector<std::string>& projections) {
 
     outputNames.push_back(id);
 
-    const auto names = outputMapping_->reverseLookup(id);
+    auto names = reverseLookup(id);
     for (const auto& name : names) {
-      newOutputMapping->add(name, id);
+      newOutputMapping->add(name, id, inputType->childAt(i));
     }
 
     exprs.push_back(
@@ -189,7 +190,7 @@ PlanBuilder& PlanBuilder::with(const std::vector<std::string>& projections) {
   resolveProjections(projections, outputNames, exprs, *newOutputMapping);
 
   node_ = std::make_shared<ProjectNode>(nextId(), node_, outputNames, exprs);
-  outputMapping_ = newOutputMapping;
+  outputMapping_.back() = newOutputMapping;
 
   return *this;
 }
@@ -219,7 +220,7 @@ PlanBuilder& PlanBuilder::aggregate(
     if (untypedExpr->alias().has_value()) {
       const auto& alias = untypedExpr->alias().value();
       outputNames.push_back(newName(alias));
-      newOutputMapping->add(alias, outputNames.back());
+      newOutputMapping->add(alias, outputNames.back(), expr->type());
     } else {
       outputNames.push_back(newName(expr->name()));
     }
@@ -235,36 +236,52 @@ PlanBuilder& PlanBuilder::aggregate(
       exprs,
       outputNames);
 
-  outputMapping_ = newOutputMapping;
+  outputMapping_.back() = newOutputMapping;
 
   return *this;
 }
 
 namespace {
 
+std::string nameMappingListToString(
+    const std::vector<std::shared_ptr<NameMappings>>& mappings) {
+  std::vector<std::string> mappingStrings;
+  mappingStrings.reserve(mappings.size());
+
+  for (const auto& mapping : mappings) {
+    mappingStrings.push_back(mapping->toString());
+  }
+
+  return fmt::format("{}", fmt::join(mappingStrings, ", "));
+}
+
 ExprPtr resolveJoinInputName(
     const std::optional<std::string>& alias,
     const std::string& name,
-    const NameMappings& mapping,
+    const std::vector<std::shared_ptr<NameMappings>>& mapping,
     const RowTypePtr& inputRowType) {
   if (alias.has_value()) {
-    if (auto id = mapping.lookup(alias.value(), name)) {
-      return std::make_shared<InputReferenceExpr>(
-          inputRowType->findChild(id.value()), id.value());
+    for (auto i = mapping.size() - 1; i >= 0; --i) {
+      if (auto id = mapping[i]->lookup(alias.value(), name)) {
+        return std::make_shared<InputReferenceExpr>(
+            inputRowType->findChild(id.value().id), id.value().id);
+      }
     }
 
     return nullptr;
   }
 
-  if (auto id = mapping.lookup(name)) {
-    return std::make_shared<InputReferenceExpr>(
-        inputRowType->findChild(id.value()), id.value());
+  for (auto i = mapping.size() - 1; i >= 0; --i) {
+    if (auto id = mapping[i]->lookup(name)) {
+      return std::make_shared<InputReferenceExpr>(
+          inputRowType->findChild(id.value().id), id.value().id);
+    }
   }
 
   VELOX_USER_FAIL(
       "Cannot resolve column in join input: {} not found in [{}]",
       NameMappings::QualifiedName{alias, name}.toString(),
-      mapping.toString());
+      nameMappingListToString(mapping));
 }
 
 std::string toString(
@@ -694,11 +711,12 @@ PlanBuilder& PlanBuilder::join(
     JoinType joinType) {
   VELOX_USER_CHECK_NOT_NULL(node_, "Join node cannot be a leaf node");
   VELOX_USER_CHECK_NOT_NULL(right.node_);
+  VELOX_CHECK_EQ(outputMapping_.size(), right.outputMapping_.size());
 
   // User-facing column names may have duplicates between left and right side.
   // Columns that are unique can be referenced as is. Columns that are not
   // unique must be referenced using an alias.
-  outputMapping_->merge(*right.outputMapping_);
+  outputMapping_.back()->merge(*right.outputMapping_.back());
 
   auto inputRowType = node_->outputType()->unionWith(right.node_->outputType());
 
@@ -708,7 +726,7 @@ PlanBuilder& PlanBuilder::join(
     expr = resolveScalarTypesImpl(
         untypedExpr, [&](const auto& alias, const auto& name) {
           return resolveJoinInputName(
-              alias, name, *outputMapping_, inputRowType);
+              alias, name, outputMapping_, inputRowType);
         });
   }
 
@@ -726,6 +744,79 @@ PlanBuilder& PlanBuilder::unionAll(const PlanBuilder& other) {
       nextId(),
       std::vector<LogicalPlanNodePtr>{node_, other.node_},
       SetOperation::kUnionAll);
+
+  return *this;
+}
+
+ExprPtr PlanBuilder::buildSubquery(
+    LogicalPlanNodePtr subquery,
+    std::optional<SpecialForm> form,
+    const std::optional<std::string>& input) {
+  std::vector<ExprPtr> resolvedInputs;
+  if (input.has_value()) {
+    VELOX_CHECK(form.has_value() && form.value() == SpecialForm::kIn);
+    auto untypedExpr = parse::parseExpr(input.value(), parseOptions_);
+    resolvedInputs.push_back(resolveScalarTypes(untypedExpr));
+  }
+
+  SubqueryType subqueryType;
+  if (!form.has_value()) {
+    subqueryType = SubqueryType::SCALAR;
+    return std::make_shared<SubqueryExpr>(subquery, subqueryType);
+  }
+
+  if (form.value() == SpecialForm::kExists) {
+    subqueryType = SubqueryType::EXISTS;
+  } else if (form.value() == SpecialForm::kIn) {
+    subqueryType = SubqueryType::IN;
+  } else {
+    VELOX_USER_FAIL("Unsupported subquery for special form: {}", form.value());
+  }
+
+  resolvedInputs.push_back(
+      std::make_shared<SubqueryExpr>(subquery, subqueryType));
+  return std::make_shared<SpecialFormExpr>(
+      BOOLEAN(), form.value(), resolvedInputs);
+}
+
+PlanBuilder& PlanBuilder::with(
+    const std::unordered_map<ExprPtr, std::string>& subqueryOutput) {
+  VELOX_USER_CHECK_NOT_NULL(node_, "Project node cannot be a leaf node");
+
+  std::vector<std::string> outputNames;
+  outputNames.reserve(subqueryOutput.size());
+
+  std::vector<ExprPtr> exprs;
+  exprs.reserve(subqueryOutput.size());
+
+  auto newOutputMapping = std::make_shared<NameMappings>();
+
+  const auto& inputType = node_->outputType();
+
+  for (auto i = 0; i < inputType->size(); i++) {
+    const auto& id = inputType->nameOf(i);
+
+    outputNames.push_back(id);
+
+    auto names = reverseLookup(id);
+    for (const auto& name : names) {
+      newOutputMapping->add(name, id, inputType->childAt(i));
+    }
+
+    exprs.push_back(
+        std::make_shared<InputReferenceExpr>(inputType->childAt(i), id));
+  }
+
+  for (const auto& [expr, name] : subqueryOutput) {
+    auto id = newName(name);
+    outputNames.push_back(id);
+    // user is responsible for making sure the name is unique
+    newOutputMapping->add(name, id, expr->type());
+    exprs.push_back(expr);
+  }
+
+  node_ = std::make_shared<ProjectNode>(nextId(), node_, outputNames, exprs);
+  outputMapping_.back() = newOutputMapping;
 
   return *this;
 }
@@ -761,23 +852,27 @@ ExprPtr PlanBuilder::resolveInputName(
     const std::optional<std::string>& alias,
     const std::string& name) const {
   if (alias.has_value()) {
-    if (auto id = outputMapping_->lookup(alias.value(), name)) {
-      return std::make_shared<InputReferenceExpr>(
-          node_->outputType()->findChild(id.value()), id.value());
+    for (int i = outputMapping_.size() - 1; i >= 0; --i) {
+      if (auto id = outputMapping_.at(i)->lookup(alias.value(), name)) {
+        return std::make_shared<InputReferenceExpr>(
+            id.value().type, id.value().id);
+      }
     }
 
     return nullptr;
   }
 
-  if (auto id = outputMapping_->lookup(name)) {
-    return std::make_shared<InputReferenceExpr>(
-        node_->outputType()->findChild(id.value()), id.value());
+  for (int i = outputMapping_.size() - 1; i >= 0; --i) {
+    if (auto id = outputMapping_.at(i)->lookup(name)) {
+      return std::make_shared<InputReferenceExpr>(
+          id.value().type, id.value().id);
+    }
   }
 
   VELOX_USER_FAIL(
       "Cannot resolve column: {} not in [{}]",
       NameMappings::QualifiedName{alias, name}.toString(),
-      outputMapping_->toString());
+      nameMappingListToString(outputMapping_));
 }
 
 ExprPtr PlanBuilder::resolveScalarTypes(const core::ExprPtr& expr) const {
@@ -795,7 +890,7 @@ AggregateExprPtr PlanBuilder::resolveAggregateTypes(
 }
 
 PlanBuilder& PlanBuilder::as(const std::string& alias) {
-  outputMapping_->setAlias(alias);
+  outputMapping_.back()->setAlias(alias);
   return *this;
 }
 
@@ -803,12 +898,23 @@ std::string PlanBuilder::newName(const std::string& hint) {
   return nameAllocator_->newName(hint);
 }
 
+std::vector<NameMappings::QualifiedName> PlanBuilder::reverseLookup(
+    const std::string& id) {
+  for (int i = outputMapping_.size() - 1; i >= 0; --i) {
+    auto names = outputMapping_[i]->reverseLookup(id);
+    if (!names.empty()) {
+      return names;
+    }
+  }
+  return {};
+}
+
 LogicalPlanNodePtr PlanBuilder::build() {
   VELOX_USER_CHECK_NOT_NULL(node_);
 
   // Use user-specified names for the output. Should we add an OutputNode?
 
-  const auto names = outputMapping_->uniqueNames();
+  const auto names = outputMapping_.back()->uniqueNames();
 
   bool needRename = false;
 

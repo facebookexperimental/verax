@@ -26,18 +26,30 @@ std::string NameMappings::QualifiedName::toString() const {
   return name;
 }
 
-void NameMappings::add(const QualifiedName& name, const std::string& id) {
-  bool ok = mappings_.emplace(name, id).second;
+void NameMappings::add(
+    const QualifiedName& name,
+    const std::string& id,
+    const TypePtr type) {
+  bool ok =
+      mappings_.emplace(name, NameMappings::IdAndType{.id = id, .type = type})
+          .second;
   VELOX_CHECK(ok, "Duplicate name: {}", name.toString());
 }
 
-void NameMappings::add(const std::string& name, const std::string& id) {
-  bool ok =
-      mappings_.emplace(QualifiedName{.alias = {}, .name = name}, id).second;
+void NameMappings::add(
+    const std::string& name,
+    const std::string& id,
+    const TypePtr type) {
+  bool ok = mappings_
+                .emplace(
+                    QualifiedName{.alias = {}, .name = name},
+                    NameMappings::IdAndType{.id = id, .type = type})
+                .second;
   VELOX_CHECK(ok, "Duplicate name: {}", name);
 }
 
-std::optional<std::string> NameMappings::lookup(const std::string& name) const {
+std::optional<NameMappings::IdAndType> NameMappings::lookup(
+    const std::string& name) const {
   auto it = mappings_.find(QualifiedName{.alias = {}, .name = name});
   if (it != mappings_.end()) {
     return it->second;
@@ -46,7 +58,7 @@ std::optional<std::string> NameMappings::lookup(const std::string& name) const {
   return std::nullopt;
 }
 
-std::optional<std::string> NameMappings::lookup(
+std::optional<NameMappings::IdAndType> NameMappings::lookup(
     const std::string& alias,
     const std::string& name) const {
   auto it = mappings_.find(QualifiedName{.alias = alias, .name = name});
@@ -61,7 +73,7 @@ std::vector<NameMappings::QualifiedName> NameMappings::reverseLookup(
     const std::string& id) const {
   std::vector<QualifiedName> names;
   for (const auto& [key, value] : mappings_) {
-    if (value == id) {
+    if (value.id == id) {
       names.push_back(key);
     }
   }
@@ -76,7 +88,7 @@ std::vector<NameMappings::QualifiedName> NameMappings::reverseLookup(
 }
 
 void NameMappings::setAlias(const std::string& alias) {
-  std::vector<std::pair<std::string, std::string>> names;
+  std::vector<std::pair<std::string, NameMappings::IdAndType>> names;
   for (auto it = mappings_.begin(); it != mappings_.end();) {
     if (it->first.alias.has_value()) {
       it = mappings_.erase(it);
@@ -107,7 +119,7 @@ std::unordered_map<std::string, std::string> NameMappings::uniqueNames() const {
   std::unordered_map<std::string, std::string> names;
   for (const auto& [name, id] : mappings_) {
     if (!name.alias.has_value()) {
-      names.emplace(id, name.name);
+      names.emplace(id.id, name.name);
     }
   }
   return names;
@@ -122,7 +134,8 @@ std::string NameMappings::toString() const {
     } else {
       first = false;
     }
-    out << name.toString() << " -> " << id;
+    out << name.toString() << " -> " << id.id << " (" << id.type->toString()
+        << ")";
   }
   return out.str();
 }

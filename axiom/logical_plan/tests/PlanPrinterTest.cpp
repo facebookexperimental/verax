@@ -131,7 +131,7 @@ TEST_F(PlanPrinterTest, aggregate) {
           .values(rowType, data)
           .aggregate(
               {"a"}, {"sum(b) as total", "avg(b) as mean", "min(b + 1::int)"})
-          .with({"total + 1", "mean * 0.3"})
+          .with(std::vector<std::string>{"total + 1", "mean * 0.3"})
           .build();
 
   const auto lines = toLines(plan);
@@ -354,6 +354,157 @@ TEST_F(PlanPrinterTest, lambda) {
           testing::StartsWith(
               "    expr := filter(sequence(CAST(1 AS BIGINT), a), x -> gt(x, b))"),
           testing::StartsWith("  - Values"),
+          testing::Eq("")));
+}
+
+TEST_F(PlanPrinterTest, InSubquery) {
+  auto leftType = ROW({"key", "v"}, {INTEGER(), INTEGER()});
+  std::vector<Variant> leftData{
+      Variant::row({1, 10}),
+      Variant::row({2, 20}),
+      Variant::row({2, 21}),
+      Variant::row({3, 30}),
+  };
+
+  auto rightType = ROW({"key", "w"}, {INTEGER(), INTEGER()});
+  std::vector<Variant> rightData{
+      Variant::row({1, 11}),
+      Variant::row({2, 22}),
+  };
+
+  auto context = PlanBuilder::Context();
+  PlanBuilder planBuilder(context);
+  planBuilder.values(leftType, leftData).as("l");
+  PlanBuilder subqueryBuilder(context, planBuilder.getOutputMapping());
+  subqueryBuilder.values(rightType, rightData).as("r").project({"key"});
+  auto subqueryExpr = planBuilder.buildSubquery(
+      subqueryBuilder.build(), SpecialForm::kIn, {"key"});
+  auto plan = planBuilder
+                  .with(std::unordered_map<ExprPtr, std::string>(
+                      {{subqueryExpr, "in_subquery_value"}}))
+                  .filter("in_subquery_value")
+                  .build();
+
+  const auto lines = toLines(plan);
+
+  EXPECT_THAT(
+      lines,
+      testing::ElementsAre(
+          testing::StartsWith("- Filter: in_subquery_value"),
+          testing::StartsWith("  - Project:"),
+          testing::StartsWith("      key := key"),
+          testing::StartsWith("      v := v"),
+          testing::StartsWith("      in_subquery_value := IN(key,"),
+          testing::StartsWith("(- Project:"),
+          testing::StartsWith("    key := key_0"),
+          testing::StartsWith("  - Project:"),
+          testing::StartsWith("      key_0 := key_0"),
+          testing::StartsWith("    - Values: 2 rows"),
+          testing::StartsWith(")"),
+          testing::StartsWith(")"),
+          testing::StartsWith("    - Values: 4 rows"),
+          testing::Eq("")));
+}
+
+TEST_F(PlanPrinterTest, ExistsSubquery) {
+  auto leftType = ROW({"key", "v"}, {INTEGER(), INTEGER()});
+  std::vector<Variant> leftData{
+      Variant::row({1, 10}),
+      Variant::row({2, 20}),
+      Variant::row({2, 21}),
+      Variant::row({3, 30}),
+  };
+
+  auto rightType = ROW({"key", "w"}, {INTEGER(), INTEGER()});
+  std::vector<Variant> rightData{
+      Variant::row({1, 11}),
+      Variant::row({2, 22}),
+  };
+
+  auto context = PlanBuilder::Context();
+  PlanBuilder planBuilder(context);
+  planBuilder.values(leftType, leftData).as("l");
+  PlanBuilder subqueryBuilder(context, planBuilder.getOutputMapping());
+  subqueryBuilder.values(rightType, rightData)
+      .as("r")
+      .filter("key = l.key")
+      .project({"key"});
+  auto subqueryExpr = planBuilder.buildSubquery(
+      subqueryBuilder.build(), SpecialForm::kExists, std::nullopt);
+  auto plan = planBuilder
+                  .with(std::unordered_map<ExprPtr, std::string>(
+                      {{subqueryExpr, "exists_subquery_value"}}))
+                  .filter("exists_subquery_value")
+                  .build();
+
+  const auto lines = toLines(plan);
+
+  EXPECT_THAT(
+      lines,
+      testing::ElementsAre(
+          testing::StartsWith("- Filter: exists_subquery_value"),
+          testing::StartsWith("  - Project:"),
+          testing::StartsWith("      key := key"),
+          testing::StartsWith("      v := v"),
+          testing::StartsWith("      exists_subquery_value := EXISTS("),
+          testing::StartsWith("(- Project:"),
+          testing::StartsWith("    key := key_0"),
+          testing::StartsWith("  - Project:"),
+          testing::StartsWith("      key_0 := key_0"),
+          testing::StartsWith("    - Filter: eq(key_0, key)"),
+          testing::StartsWith("      - Values: 2 rows"),
+          testing::StartsWith(")"),
+          testing::StartsWith(")"),
+          testing::StartsWith("    - Values: 4 rows"),
+          testing::Eq("")));
+}
+
+TEST_F(PlanPrinterTest, scalarSubquery) {
+  auto leftType = ROW({"key", "v"}, {INTEGER(), INTEGER()});
+  std::vector<Variant> leftData{
+      Variant::row({1, 10}),
+      Variant::row({2, 20}),
+      Variant::row({2, 21}),
+      Variant::row({3, 30}),
+  };
+
+  auto rightType = ROW({"key", "w"}, {INTEGER(), INTEGER()});
+  std::vector<Variant> rightData{
+      Variant::row({1, 11}),
+      Variant::row({2, 22}),
+  };
+
+  auto context = PlanBuilder::Context();
+  PlanBuilder planBuilder(context);
+  planBuilder.values(leftType, leftData).as("l");
+  PlanBuilder subqueryBuilder(context, planBuilder.getOutputMapping());
+  subqueryBuilder.values(rightType, rightData)
+      .as("r")
+      .aggregate({}, {"min(w) as min_w"});
+  auto subqueryExpr = planBuilder.buildSubquery(
+      subqueryBuilder.build(), std::nullopt, std::nullopt);
+  auto plan = planBuilder
+                  .with(std::unordered_map<ExprPtr, std::string>(
+                      {{subqueryExpr, "scalar_subquery_value"}}))
+                  .filter("v > scalar_subquery_value")
+                  .build();
+
+  const auto lines = toLines(plan);
+
+  EXPECT_THAT(
+      lines,
+      testing::ElementsAre(
+          testing::StartsWith("- Filter: gt(v, scalar_subquery_value)"),
+          testing::StartsWith("  - Project:"),
+          testing::StartsWith("      key := key"),
+          testing::StartsWith("      v := v"),
+          testing::StartsWith("      scalar_subquery_value :="),
+          testing::StartsWith("(- Aggregate("),
+          testing::StartsWith("    min_w := min(w)"),
+          testing::StartsWith("  - Values: 2 rows"),
+          testing::StartsWith(")"),
+          testing::Eq(""),
+          testing::StartsWith("    - Values: 4 rows"),
           testing::Eq("")));
 }
 
