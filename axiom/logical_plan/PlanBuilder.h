@@ -74,6 +74,8 @@ class PlanBuilder {
       const std::string& condition,
       JoinType joinType);
 
+  PlanBuilder& unionAll(const PlanBuilder& other);
+
   PlanBuilder& sort(const std::vector<std::string>& sortingKeys);
 
   /// An alias for 'sort'.

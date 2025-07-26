@@ -154,6 +154,41 @@ TEST_F(PlanPrinterTest, aggregate) {
           testing::Eq("")));
 }
 
+TEST_F(PlanPrinterTest, union) {
+  auto type = ROW({"a", "b"}, {INTEGER(), DOUBLE()});
+
+  std::vector<Variant> data1{
+      Variant::row({1, 1.1}),
+      Variant::row({2, 2.2}),
+  };
+
+  std::vector<Variant> data2{
+      Variant::row({3, 3.3}),
+      Variant::row({4, 4.4}),
+  };
+
+  auto context = PlanBuilder::Context();
+  auto plan = PlanBuilder(context)
+                  .values(type, data1)
+                  .unionAll(PlanBuilder(context).values(type, data2))
+                  .with({"a::double + b"})
+                  .build();
+
+  const auto lines = toLines(plan);
+
+  EXPECT_THAT(
+      lines,
+      testing::ElementsAre(
+          testing::StartsWith("- Project"),
+          testing::StartsWith("    a := a"),
+          testing::StartsWith("    b := b"),
+          testing::StartsWith("    expr := plus(CAST(a AS DOUBLE), b)"),
+          testing::StartsWith("  - UNION ALL"),
+          testing::StartsWith("    - Values"),
+          testing::StartsWith("    - Values"),
+          testing::Eq("")));
+}
+
 TEST_F(PlanPrinterTest, join) {
   auto leftType = ROW({"key", "v"}, {INTEGER(), INTEGER()});
   std::vector<Variant> leftData{

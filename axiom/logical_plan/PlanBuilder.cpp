@@ -718,6 +718,18 @@ PlanBuilder& PlanBuilder::join(
   return *this;
 }
 
+PlanBuilder& PlanBuilder::unionAll(const PlanBuilder& other) {
+  VELOX_USER_CHECK_NOT_NULL(node_, "UnionAll node cannot be a leaf node");
+  VELOX_USER_CHECK_NOT_NULL(other.node_);
+
+  node_ = std::make_shared<SetNode>(
+      nextId(),
+      std::vector<LogicalPlanNodePtr>{node_, other.node_},
+      SetOperation::kUnionAll);
+
+  return *this;
+}
+
 PlanBuilder& PlanBuilder::sort(const std::vector<std::string>& sortingKeys) {
   VELOX_USER_CHECK_NOT_NULL(node_, "Sort node cannot be a leaf node");
 

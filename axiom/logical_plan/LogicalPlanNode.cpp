@@ -196,6 +196,38 @@ folly::F14FastMap<SetOperation, std::string> setOperationNames() {
 
 VELOX_DEFINE_ENUM_NAME(SetOperation, setOperationNames)
 
+SetNode::SetNode(
+    const std::string& id,
+    const std::vector<LogicalPlanNodePtr>& inputs,
+    SetOperation operation)
+    : LogicalPlanNode(NodeKind::kSet, id, inputs, inputs.at(0)->outputType()),
+      operation_{operation} {
+  VELOX_USER_CHECK_GE(
+      inputs.size(), 2, "Set operation requires at least 2 inputs");
+
+  const auto firstRowType = inputs.at(0)->outputType();
+
+  for (auto i = 1; i < inputs.size(); ++i) {
+    const auto& rowType = inputs.at(i)->outputType();
+
+    // The names are different, but types must be the same.
+    VELOX_USER_CHECK(
+        firstRowType->equivalent(*rowType),
+        "Output schemas of all inputs to a Set operation must match");
+
+    // Individual column types must match exactly.
+    for (auto j = 0; j < firstRowType->size(); ++j) {
+      VELOX_USER_CHECK(
+          *firstRowType->childAt(j) == *rowType->childAt(j),
+          "Output schemas of all inputs to a Set operation must match: {} vs. {} at {}.{}",
+          firstRowType->childAt(j)->toSummaryString(),
+          rowType->childAt(j)->toSummaryString(),
+          j,
+          firstRowType->nameOf(j));
+    }
+  }
+}
+
 void SetNode::accept(
     const PlanNodeVisitor& visitor,
     PlanNodeVisitorContext& context) const {

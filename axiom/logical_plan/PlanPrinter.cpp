@@ -142,7 +142,7 @@ class ToTextVisitor : public PlanNodeVisitor {
 
   void visit(const SetNode& node, PlanNodeVisitorContext& context)
       const override {
-    appendNode("Set", node, context);
+    appendNode(SetOperationName::toName(node.operation()), node, context);
   }
 
   void visit(const UnnestNode& node, PlanNodeVisitorContext& context)
@@ -156,7 +156,7 @@ class ToTextVisitor : public PlanNodeVisitor {
   }
 
   void appendNode(
-      const std::string& name,
+      std::string_view name,
       const LogicalPlanNode& node,
       const std::optional<std::string>& details,
       PlanNodeVisitorContext& context) const {
@@ -175,7 +175,7 @@ class ToTextVisitor : public PlanNodeVisitor {
   }
 
   void appendNode(
-      const std::string& name,
+      std::string_view name,
       const LogicalPlanNode& node,
       PlanNodeVisitorContext& context) const {
     appendNode(name, node, std::nullopt, context);
