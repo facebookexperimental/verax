@@ -17,12 +17,11 @@
 
 #include "axiom/logical_plan/LogicalPlanNode.h"
 #include "axiom/logical_plan/NameAllocator.h"
+#include "axiom/logical_plan/NameMappings.h"
 #include "velox/parse/ExpressionsParser.h"
 #include "velox/parse/PlanNodeIdGenerator.h"
 
 namespace facebook::velox::logical_plan {
-
-class NameMappings;
 
 class PlanBuilder {
  public:
@@ -46,6 +45,16 @@ class PlanBuilder {
     VELOX_CHECK_NOT_NULL(nameAllocator_);
   }
 
+  explicit PlanBuilder(
+      const Context& context,
+      std::vector<std::shared_ptr<NameMappings>> outputMapping)
+      : planNodeIdGenerator_{context.planNodeIdGenerator},
+        nameAllocator_{context.nameAllocator} {
+    VELOX_CHECK_NOT_NULL(planNodeIdGenerator_);
+    VELOX_CHECK_NOT_NULL(nameAllocator_);
+    outputMapping_ = outputMapping;
+  }
+
   PlanBuilder& values(const RowTypePtr& rowType, std::vector<Variant> rows);
 
   PlanBuilder& tableScan(
@@ -64,6 +73,10 @@ class PlanBuilder {
 
   /// Similar to 'project', but appends 'projections' to the existing columns.
   PlanBuilder& with(const std::vector<std::string>& projections);
+
+  // Create a projection mapping subquery output to name corresponding to hints
+  PlanBuilder& with(
+      const std::unordered_map<ExprPtr, std::string>& subqueryOutput);
 
   PlanBuilder& aggregate(
       const std::vector<std::string>& groupingKeys,
@@ -91,7 +104,16 @@ class PlanBuilder {
 
   PlanBuilder& as(const std::string& alias);
 
+  ExprPtr buildSubquery(
+      LogicalPlanNodePtr subquery,
+      std::optional<SpecialForm> form,
+      const std::optional<std::string>& input);
+
   LogicalPlanNodePtr build();
+
+  std::vector<std::shared_ptr<NameMappings>> getOutputMapping() const {
+    return outputMapping_;
+  };
 
  private:
   std::string nextId() {
@@ -114,6 +136,8 @@ class PlanBuilder {
       std::vector<ExprPtr>& exprs,
       NameMappings& mappings);
 
+  std::vector<NameMappings::QualifiedName> reverseLookup(const std::string& id);
+
   const std::shared_ptr<core::PlanNodeIdGenerator> planNodeIdGenerator_;
   const std::shared_ptr<NameAllocator> nameAllocator_;
   const parse::ParseOptions parseOptions_;
@@ -121,7 +145,7 @@ class PlanBuilder {
   LogicalPlanNodePtr node_;
 
   // Mapping from user-provided to auto-generated output column names.
-  std::shared_ptr<NameMappings> outputMapping_;
+  std::vector<std::shared_ptr<NameMappings>> outputMapping_;
 };
 
 } // namespace facebook::velox::logical_plan

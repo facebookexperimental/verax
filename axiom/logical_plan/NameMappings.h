@@ -19,6 +19,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include "velox/type/Type.h"
 
 namespace facebook::velox::logical_plan {
 
@@ -38,17 +39,31 @@ class NameMappings {
     std::string toString() const;
   };
 
-  /// Adds a mapping from 'name' to 'id'. Throws if 'name' already exists.
-  void add(const QualifiedName& name, const std::string& id);
+  struct IdAndType {
+    std::string id;
+    TypePtr type;
+
+    bool operator==(const IdAndType& other) const {
+      return id == other.id && type == other.type;
+    }
+
+    std::string toString() const {
+      return fmt::format("{}:{}", id, type->toString());
+    }
+  };
 
   /// Adds a mapping from 'name' to 'id'. Throws if 'name' already exists.
-  void add(const std::string& name, const std::string& id);
+  void
+  add(const QualifiedName& name, const std::string& id, const TypePtr type);
+
+  /// Adds a mapping from 'name' to 'id'. Throws if 'name' already exists.
+  void add(const std::string& name, const std::string& id, const TypePtr type);
 
   /// Returns ID for the specified 'name' if exists.
-  std::optional<std::string> lookup(const std::string& name) const;
+  std::optional<IdAndType> lookup(const std::string& name) const;
 
   /// Returns ID for the specified 'name' if exists.
-  std::optional<std::string> lookup(
+  std::optional<IdAndType> lookup(
       const std::string& alias,
       const std::string& name) const;
 
@@ -89,7 +104,7 @@ class NameMappings {
 
   // Mapping from names to IDs. Unique names may appear twice: w/ and w/o an
   // alias.
-  std::unordered_map<QualifiedName, std::string, QualifiedNameHasher> mappings_;
+  std::unordered_map<QualifiedName, IdAndType, QualifiedNameHasher> mappings_;
 };
 
 } // namespace facebook::velox::logical_plan

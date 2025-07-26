@@ -16,6 +16,14 @@
 
 #include "axiom/logical_plan/ExprPrinter.h"
 
+// Forward declaration to avoid circular dependency
+namespace facebook::velox::logical_plan {
+class PlanPrinter {
+ public:
+  static std::string toText(const LogicalPlanNode& root);
+};
+} // namespace facebook::velox::logical_plan
+
 namespace facebook::velox::logical_plan {
 
 namespace {
@@ -98,10 +106,14 @@ class ToTextVisitor : public ExprVisitor {
     expr.body()->accept(*this, context);
   }
 
-  void visit(const SubqueryExpr& /* expr */, ExprVisitorContext& /* context */)
+  void visit(const SubqueryExpr& expr, ExprVisitorContext& context)
       const override {
-    // TODO Implement.
-    VELOX_NYI();
+    auto& out = toOut(context);
+    out << std::endl;
+    out << "(";
+    out << PlanPrinter::toText(*(expr.subquery()));
+    out << ")";
+    out << std::endl;
   }
 
  private:

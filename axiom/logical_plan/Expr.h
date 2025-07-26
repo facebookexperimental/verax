@@ -338,7 +338,9 @@ enum class SpecialForm {
 
   kStar = 9,
 
-  // TODO Add IN and EXISTS.
+  kIn = 10,
+
+  kExists = 11,
 };
 
 VELOX_DECLARE_ENUM_NAME(SpecialForm)
@@ -622,14 +624,25 @@ using LambdaExprPtr = std::shared_ptr<const LambdaExpr>;
 class LogicalPlanNode;
 using LogicalPlanNodePtr = std::shared_ptr<const LogicalPlanNode>;
 
-/// Scalar subquery that returns exactly one row and one column. Can be used
-/// anywhere a scalar function call can be used.
+/// Enum representing the type of subquery.
+enum class SubqueryType {
+  SCALAR, // Scalar subquery that returns exactly one row and one column
+  IN, // IN subquery used in expressions like "x IN (subquery)"
+  EXISTS // EXISTS subquery used to check if subquery returns any rows
+};
+
+/// Subquery expression that can be used in various contexts depending on its
+/// type.
 class SubqueryExpr : public Expr {
  public:
-  explicit SubqueryExpr(const LogicalPlanNodePtr& subquery);
+  explicit SubqueryExpr(const LogicalPlanNodePtr subquery, SubqueryType type);
 
   const LogicalPlanNodePtr& subquery() const {
     return subquery_;
+  }
+
+  SubqueryType subqueryType() const {
+    return subqueryType_;
   }
 
   void accept(const ExprVisitor& visitor, ExprVisitorContext& context)
@@ -637,6 +650,7 @@ class SubqueryExpr : public Expr {
 
  private:
   const LogicalPlanNodePtr subquery_;
+  const SubqueryType subqueryType_;
 };
 
 using SubqueryExprPtr = std::shared_ptr<const SubqueryExpr>;
