@@ -17,6 +17,10 @@ add_executable(velox_fe_logical_plan_tests
 
 add_test(velox_fe_logical_plan_tests velox_fe_logical_plan_tests)
 
+# Include the bundled googletest headers before system ones
+include_directories(BEFORE SYSTEM ${googletest_SOURCE_DIR}/googletest/include)
+include_directories(BEFORE SYSTEM ${googletest_SOURCE_DIR}/googlemock/include)
+
 target_link_libraries(velox_fe_logical_plan_tests
                       velox_fe_logical_plan_builder
                       GTest::gtest

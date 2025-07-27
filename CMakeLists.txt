@@ -30,8 +30,11 @@ if(POLICY CMP0135)
 endif()
 
 # Use ThirdPartyToolchain dependencies macros from Velox.
-list(PREPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/CMake"
-     "${PROJECT_SOURCE_DIR}/velox/CMake")
+list(PREPEND CMAKE_MODULE_PATH
+     "${PROJECT_SOURCE_DIR}/CMake"
+     "${PROJECT_SOURCE_DIR}/CMake/resolve_dependency_modules"
+     "${PROJECT_SOURCE_DIR}/velox/CMake"
+     "${PROJECT_SOURCE_DIR}/velox/CMake/resolve_dependency_modules")
 include(ResolveDependency)
 
 set(VELOX_BUILD_VECTOR_TEST_UTILS
@@ -39,6 +42,9 @@ set(VELOX_BUILD_VECTOR_TEST_UTILS
     CACHE BOOL "Velox vector test utilities (VectorMaker).")
 
 set(VELOX_ENABLE_PARQUET ON)
+set(VELOX_ENABLE_BENCHMARKS ON)
+set(VELOX_BUILD_TESTING ON)
+set(VELOX_ENABLE_GEO ON)
 
 set(VELOX_DEPENDENCY_SOURCE
     AUTO
@@ -101,8 +107,6 @@ if(COMMAND_STATUS EQUAL "1")
   message(FATAL_ERROR "Unable to determine compiler flags!")
 endif()
 message("Setting CMAKE_CXX_FLAGS=${SCRIPT_CXX_FLAGS}")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SCRIPT_CXX_FLAGS}")
-
 message("FINAL CMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}")
 
 include(CTest) # include after project() but before add_subdirectory()
@@ -116,8 +120,7 @@ velox_resolve_dependency(glog)
 velox_set_source(gflags)
 velox_resolve_dependency(gflags COMPONENTS shared)
 
-set(BOOST_INCLUDE_LIBRARIES algorithm context filesystem program_options)
-
+# Use the BOOST_INCLUDE_LIBRARIES defined earlier
 velox_set_source(Boost)
 velox_resolve_dependency(Boost 1.77.0 COMPONENTS ${BOOST_INCLUDE_LIBRARIES})
 

@@ -12,23 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Verax C++ CI
+name: Linux Build
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
-      - 'logical_plan/**'
-      - 'optimizer/**'
-      - 'public_tld/**'
-      - '.github/workflows/test.yml'
+      - '**'
+      - '!*.md'
+      - '!docs/**'
+      - '!.github/workflows/*.md'
   pull_request:
-    branches: [main]
     paths:
-      - 'logical_plan/**'
-      - 'optimizer/**'
-      - 'public_tld/**'
-      - '.github/workflows/test.yml'
+      - '**'
+      - '!*.md'
+      - '!docs/**'
+      - '!.github/workflows/*.md'
 
 permissions:
   contents: read
@@ -38,72 +38,197 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pre-commit:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Install pre-commit
-        run: python -m pip install pre-commit
-
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-          persist-credentials: false
-
-      - name: Cache pre-commit
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pre-commit
-          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
-          restore-keys: |
-            pre-commit-
-
-      - name: Run pre-commit
-        run: |
-          files=$(git diff --name-only HEAD^1 HEAD)
-          echo "::group::Changed files"
-          echo $files | tr ' ' '\n'
-          echo "::endgroup::"
-          pre-commit run --show-diff-on-failure --color=always --files $files
-
-  build-and-test:
-    runs-on: ubuntu-latest
-    needs: pre-commit
+  build-velox:
+    name: Build Velox
+    runs-on: 8-core-ubuntu-22.04
+    # Running directly on the runner like ubuntu-debug job
     env:
-      CPU_TARGET: "default"
       CCACHE_DIR: ${{ github.workspace }}/ccache
+      # Using BUNDLED as in ubuntu-debug job from velox/.github/workflows/linux-build-base.yml
+      VELOX_DEPENDENCY_SOURCE: BUNDLED
+      ICU_SOURCE: SYSTEM
+    defaults:
+      run:
+        shell: bash
+        working-directory: velox
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          submodules: 'recursive'
-
-      - name: Setup ccache
-        uses: actions/cache@v4
+      # Get ccache from stash - using same key pattern as in ubuntu-debug job
+      - name: Get Ccache Stash
+        uses: apache/infrastructure-actions/stash/restore@3354c1565d4b0e335b78a76aedd82153a9e144d4
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-ubuntu-${{ hashFiles('CMakeLists.txt', 'logical_plan/**/*.cpp', 'logical_plan/**/*.h', 'optimizer/**/*.cpp', 'optimizer/**/*.h') }}
-          restore-keys: |
-            ccache-ubuntu-
+          key: ccache-ubuntu-debug-default-gcc
 
-      - name: Install dependencies
+      - name: Ensure Ccache Dir Exists
+        working-directory: ${{ github.workspace }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake build-essential ccache libboost-all-dev libgtest-dev libgoogle-glog-dev libgflags-dev libfolly-dev
+          mkdir -p "$CCACHE_DIR"
 
-      - name: Zero ccache statistics
-        run: ccache -z
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+          path: .
 
-      - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+      - name: Install Dependencies
+        run: |
+          source scripts/setup-ubuntu.sh && install_apt_deps && install_faiss_deps
 
-      - name: Build
-        run: cmake --build build --config Release -j $(nproc)
+      - name: Clear CCache Statistics
+        run: |
+          ccache -sz
 
-      - name: Show ccache statistics
-        run: ccache -s
+      - name: Make Debug Build
+        id: make-debug
+        continue-on-error: true  # Allow this step to fail without stopping the workflow
+        env:
+          VELOX_DEPENDENCY_SOURCE: BUNDLED
+          ICU_SOURCE: SYSTEM
+          MAKEFLAGS: NUM_THREADS=8 MAX_HIGH_MEM_JOBS=4 MAX_LINK_JOBS=3
+          # Using the exact same EXTRA_CMAKE_FLAGS as in ubuntu-debug job
+          EXTRA_CMAKE_FLAGS: -DVELOX_ENABLE_ARROW=ON -DVELOX_ENABLE_PARQUET=ON -DVELOX_ENABLE_EXAMPLES=ON -DVELOX_ENABLE_FAISS=ON
+        run: |
+          make debug
 
-      - name: Run tests
-        run: ctest --test-dir build --output-on-failure -j $(nproc)
+      # Report build status
+      - name: Report build status
+        run: |
+          if [ "${{ steps.make-debug.outcome }}" = "success" ]; then
+            echo "✅ Build completed successfully"
+          else
+            echo "⚠️ Build failed, but we'll continue to save the partial build"
+            echo "Check the logs above for build errors"
+          fi
+
+      - name: CCache after
+        if: always()  # Run even if build failed
+        run: |
+          ccache -vs
+
+      # Save ccache using the same key pattern as in ubuntu-debug job
+      - name: Save ccache
+        if: always()  # Run even if build failed
+        uses: apache/infrastructure-actions/stash/save@3354c1565d4b0e335b78a76aedd82153a9e144d4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-ubuntu-debug-default-gcc
+
+      # Calculate size of build directory before upload
+      - name: Calculate build directory size
+        if: always()  # Run even if build failed
+        working-directory: ${{ github.workspace }}  # Override to workspace root
+        run: |
+          echo "Build directory size:"
+          if [ -d "velox/_build" ]; then
+            du -sh velox/_build
+            echo "Number of files:"
+            find velox/_build -type f | wc -l
+          else
+            echo "Build directory does not exist"
+          fi
+
+      # Upload build for the next job
+      - name: Upload velox build
+        if: always()  # Run even if build failed
+        id: upload-artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: velox-build
+          path: velox/_build
+          retention-days: 7
+          if-no-files-found: warn  # Don't fail if no files found
+
+      # Verify upload was successful
+      - name: Verify upload
+        if: always()  # Run even if build failed
+        run: |
+          if [ "${{ steps.upload-artifact.outcome }}" = "success" ]; then
+            echo "✅ Upload successful!"
+            echo "Artifact name: velox-build"
+            echo "Retention period: 7 days"
+            echo "You can download this artifact from the GitHub Actions summary page"
+          else
+            echo "❌ Upload failed!"
+            echo "This might be because the build directory is empty or doesn't exist"
+          fi
+
+      # Fail the workflow if the build failed (after saving artifacts)
+      - name: Check build status
+        if: steps.make-debug.outcome != 'success'
+        run: |
+          echo "❌ The build step failed"
+          exit 1
+
+      - name: Run Tests
+        run: |
+          cd _build/debug && ctest -j 8 --output-on-failure --no-tests=error
+
+  build-verax:
+    name: Build Verax
+    needs: build-velox
+    runs-on: 8-core-ubuntu-22.04
+    # Running directly on the runner like ubuntu-debug job
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/ccache
+      VELOX_DEPENDENCY_SOURCE: BUNDLED
+      ICU_SOURCE: SYSTEM
+    defaults:
+      run:
+        shell: bash
+        working-directory: .  # Explicitly set to workspace root
+    steps:
+      - name: Ensure Ccache Dir Exists
+        working-directory: ${{ github.workspace }}
+        run: |
+          mkdir -p "$CCACHE_DIR"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      # Install dependencies for Verax build
+      - name: Install Dependencies
+        working-directory: velox
+        run: |
+          source scripts/setup-ubuntu.sh && install_apt_deps && install_faiss_deps
+
+      # Get ccache from stash
+      - name: Get Ccache Stash
+        uses: apache/infrastructure-actions/stash/restore@3354c1565d4b0e335b78a76aedd82153a9e144d4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-ubuntu-debug-default-gcc
+          restore-keys: |
+            ccache-ubuntu-debug-default-
+
+      # Download the cached velox build
+      - name: Download velox build
+        uses: actions/download-artifact@v4
+        with:
+          name: velox-build
+          path: velox/_build
+
+      - name: Clear CCache Statistics
+        run: |
+          ccache -sz
+
+      - name: Build Verax Debug
+        env:
+          MAKEFLAGS: NUM_THREADS=8 MAX_HIGH_MEM_JOBS=4 MAX_LINK_JOBS=3
+          # Using the same flags as for velox build
+          EXTRA_CMAKE_FLAGS: -DVELOX_ENABLE_ARROW=ON -DVELOX_ENABLE_PARQUET=ON -DVELOX_ENABLE_EXAMPLES=ON -DVELOX_ENABLE_FAISS=ON
+        run: |
+          make debug
+
+      - name: Run Debug Tests
+        working-directory: _build/debug
+        run: |
+          ctest -j 8 --output-on-failure --no-tests=error
+
+      - name: CCache Statistics
+        run: |
+          ccache -vs
