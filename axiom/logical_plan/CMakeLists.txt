@@ -13,7 +13,7 @@
 # limitations under the License.
 
 velox_add_library(velox_fe_logical_plan Expr.cpp ExprPrinter.cpp
-                  LogicalPlanNode.cpp PlanPrinter.cpp)
+                  LogicalPlanNode.cpp PlanPrinter.cpp ExprApi.cpp)
 
 velox_link_libraries(velox_fe_logical_plan velox_type)
 

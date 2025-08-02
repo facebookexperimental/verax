@@ -30,8 +30,11 @@ if(POLICY CMP0135)
 endif()
 
 # Use ThirdPartyToolchain dependencies macros from Velox.
-list(PREPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/CMake"
-     "${PROJECT_SOURCE_DIR}/velox/CMake")
+list(PREPEND CMAKE_MODULE_PATH
+     "${PROJECT_SOURCE_DIR}/CMake"
+     "${PROJECT_SOURCE_DIR}/CMake/resolve_dependency_modules"
+     "${PROJECT_SOURCE_DIR}/velox/CMake"
+     "${PROJECT_SOURCE_DIR}/velox/CMake/resolve_dependency_modules")
 include(ResolveDependency)
 
 set(VELOX_BUILD_VECTOR_TEST_UTILS
@@ -39,6 +42,7 @@ set(VELOX_BUILD_VECTOR_TEST_UTILS
     CACHE BOOL "Velox vector test utilities (VectorMaker).")
 
 set(VELOX_ENABLE_PARQUET ON)
+set(VELOX_ENABLE_BENCHMARKS ON)
 
 set(VELOX_DEPENDENCY_SOURCE
     AUTO
@@ -115,8 +119,6 @@ velox_resolve_dependency(glog)
 
 velox_set_source(gflags)
 velox_resolve_dependency(gflags COMPONENTS shared)
-
-set(BOOST_INCLUDE_LIBRARIES algorithm context filesystem program_options)
 
 velox_set_source(Boost)
 velox_resolve_dependency(Boost 1.77.0 COMPONENTS ${BOOST_INCLUDE_LIBRARIES})
