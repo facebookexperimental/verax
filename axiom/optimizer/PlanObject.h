@@ -75,6 +75,10 @@ class PlanObject {
     return type_;
   }
 
+  bool isColumn() const {
+    return type_ == PlanType::kColumn;
+  }
+
   template <typename T>
   T* as() {
     return reinterpret_cast<T*>(this);

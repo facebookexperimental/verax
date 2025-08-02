@@ -109,30 +109,33 @@ void DerivedTable::addImpliedJoins() {
   for (auto& join : joins) {
     if (join->isInner()) {
       for (auto i = 0; i < join->leftKeys().size(); ++i) {
-        if (join->leftKeys()[i]->type() == PlanType::kColumn &&
-            join->rightKeys()[i]->type() == PlanType::kColumn) {
-          addEdge(edges, join->leftKeys()[i]->id(), join->rightKeys()[i]->id());
+        const auto* leftKey = join->leftKeys()[i];
+        const auto* rightKey = join->rightKeys()[i];
+        if (leftKey->isColumn() && rightKey->isColumn()) {
+          addEdge(edges, leftKey->id(), rightKey->id());
         }
       }
     }
   }
+
   // The loop appends to 'joins', so loop over a copy.
   JoinEdgeVector joinsCopy = joins;
   for (auto& join : joinsCopy) {
     if (join->isInner()) {
       for (auto i = 0; i < join->leftKeys().size(); ++i) {
-        if (join->leftKeys()[i]->type() == PlanType::kColumn &&
-            join->rightKeys()[i]->type() == PlanType::kColumn) {
-          auto leftEq = join->leftKeys()[i]->as<Column>()->equivalence();
-          auto rightEq = join->rightKeys()[i]->as<Column>()->equivalence();
+        const auto* leftKey = join->leftKeys()[i];
+        const auto* rightKey = join->rightKeys()[i];
+        if (leftKey->isColumn() && rightKey->isColumn()) {
+          auto leftEq = leftKey->as<Column>()->equivalence();
+          auto rightEq = rightKey->as<Column>()->equivalence();
           if (rightEq && leftEq) {
             for (auto& left : leftEq->columns) {
               fillJoins(left, *rightEq, edges, this);
             }
           } else if (leftEq) {
-            fillJoins(join->rightKeys()[i], *leftEq, edges, this);
+            fillJoins(rightKey, *leftEq, edges, this);
           } else if (rightEq) {
-            fillJoins(join->leftKeys()[i], *rightEq, edges, this);
+            fillJoins(leftKey, *rightEq, edges, this);
           }
         }
       }
@@ -160,13 +163,14 @@ JoinEdgeP makeExists(PlanObjectCP table, const PlanObjectSet& tables) {
       if (!tables.contains(join->rightTable())) {
         continue;
       }
-      auto* exists = new (queryCtx()->allocate(sizeof(JoinEdge)))
-          JoinEdge(table, join->rightTable(), {}, false, false, true, false);
+      auto* exists = make<JoinEdge>(
+          table, join->rightTable(), ExprVector{}, false, false, true, false);
       for (auto i = 0; i < join->leftKeys().size(); ++i) {
         exists->addEquality(join->leftKeys()[i], join->rightKeys()[i]);
       }
       return exists;
     }
+
     if (join->rightTable() == table) {
       if (!join->leftTable() || !tables.contains(join->leftTable())) {
         continue;
@@ -804,7 +808,7 @@ ExprVector extractPerTable(
 /// inside and each AND has the same condition then this condition
 /// is returned and removed from the disjuncts. 'disjuncts' is
 /// changed in place. If 'replacement' is set, then this replaces
-/// the whole OR frfrom which 'disjuncts' was flattened.
+/// the whole OR from which 'disjuncts' was flattened.
 ExprVector extractCommon(ExprVector& disjuncts, ExprCP* replacement) {
   std::unordered_set<ExprCP> distinct;
   PlanObjectSet tableSet;
@@ -875,16 +879,16 @@ ExprVector extractCommon(ExprVector& disjuncts, ExprCP* replacement) {
 } // namespace
 
 void DerivedTable::expandConjuncts() {
-  auto& names = queryCtx()->optimization()->builtinNames();
+  const auto& names = queryCtx()->optimization()->builtinNames();
   bool any;
   std::unordered_set<int32_t> processed;
-  int32_t firstUnprocessed = numCanonicalConjuncts;
+  auto firstUnprocessed = numCanonicalConjuncts;
   do {
     any = false;
-    int32_t numProcessed = conjuncts.size();
-    auto end = conjuncts.size();
+    const int32_t numProcessed = conjuncts.size();
+    const auto end = conjuncts.size();
     for (auto i = firstUnprocessed; i < end; ++i) {
-      auto conjunct = conjuncts[i];
+      const auto& conjunct = conjuncts[i];
       if (isCallExpr(conjunct, names._or) &&
           !conjunct->containsNonDeterministic()) {
         ExprVector flat;

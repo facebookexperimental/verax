@@ -16,15 +16,11 @@
 
 #include "axiom/optimizer/Plan.h"
 #include "axiom/optimizer/Cost.h"
-#include "axiom/optimizer/PlanUtils.h"
 #include "velox/functions/FunctionRegistry.h"
 
 #include <iostream>
 
 namespace facebook::velox::optimizer {
-
-using namespace facebook::velox;
-using facebook::velox::core::JoinType;
 
 namespace {
 
@@ -974,16 +970,16 @@ RelationOpPtr repartitionForIndex(
   return repartition;
 }
 
-float fanoutJoinTypeLimit(JoinType joinType, float fanout) {
+float fanoutJoinTypeLimit(core::JoinType joinType, float fanout) {
   switch (joinType) {
-    case JoinType::kLeft:
+    case core::JoinType::kLeft:
       return std::max<float>(1, fanout);
-    case JoinType::kLeftSemiFilter:
+    case core::JoinType::kLeftSemiFilter:
       return std::min<float>(1, fanout);
-    case JoinType::kAnti:
+    case core::JoinType::kAnti:
       return 1 - std::min<float>(1, fanout);
-    case JoinType::kLeftSemiProject:
-    case JoinType::kRightSemiProject:
+    case core::JoinType::kLeftSemiProject:
+    case core::JoinType::kRightSemiProject:
       return 1;
     default:
       return fanout;
@@ -1020,7 +1016,8 @@ void Optimization::joinByIndex(
     }
     state.placed.add(candidate.tables.at(0));
     auto joinType = right.leftJoinType();
-    if (joinType == JoinType::kFull || joinType == JoinType::kRight) {
+    if (joinType == core::JoinType::kFull ||
+        joinType == core::JoinType::kRight) {
       // Not available by index.
       return;
     }
@@ -1221,9 +1218,10 @@ void Optimization::joinByHash(
   PlanObjectSet probeColumns;
   probeColumns.unionColumns(plan->columns());
   auto joinType = build.leftJoinType();
-  bool probeOnly = joinType == JoinType::kLeftSemiFilter ||
-      joinType == JoinType::kLeftSemiProject || joinType == JoinType::kAnti ||
-      joinType == JoinType::kLeftSemiProject;
+  bool probeOnly = joinType == core::JoinType::kLeftSemiFilter ||
+      joinType == core::JoinType::kLeftSemiProject ||
+      joinType == core::JoinType::kAnti ||
+      joinType == core::JoinType::kLeftSemiProject;
   downstream = state.downstreamColumns();
   downstream.forEach([&](auto object) {
     auto column = reinterpret_cast<ColumnCP>(object);
@@ -1267,14 +1265,14 @@ void Optimization::joinByHash(
 
 core::JoinType reverseJoinType(core::JoinType joinType) {
   switch (joinType) {
-    case JoinType::kLeft:
-      return JoinType::kRight;
-    case JoinType::kRight:
-      return JoinType::kLeft;
-    case JoinType::kLeftSemiFilter:
-      return JoinType::kRightSemiFilter;
-    case JoinType::kLeftSemiProject:
-      return JoinType::kRightSemiProject;
+    case core::JoinType::kLeft:
+      return core::JoinType::kRight;
+    case core::JoinType::kRight:
+      return core::JoinType::kLeft;
+    case core::JoinType::kLeftSemiFilter:
+      return core::JoinType::kRightSemiFilter;
+    case core::JoinType::kLeftSemiProject:
+      return core::JoinType::kRightSemiProject;
     default:
       return joinType;
   }
@@ -1361,33 +1359,25 @@ void Optimization::joinByHashRight(
       make<HashBuild>(buildInput, ++buildCounter_, build.keys, nullptr);
   state.addCost(*buildOp);
 
+  PlanObjectSet buildColumns;
+  buildColumns.unionColumns(plan->columns());
+
+  auto leftJoinType = probe.leftJoinType();
+  const auto fanout = fanoutJoinTypeLimit(leftJoinType, candidate.fanout);
+
+  // Change the join type to the right join variant.
+  const auto rightJoinType = reverseJoinType(leftJoinType);
+  VELOX_CHECK(
+      leftJoinType != rightJoinType,
+      "Join type does not have right hash join variant");
+
+  const bool buildOnly = rightJoinType == core::JoinType::kRightSemiFilter ||
+      rightJoinType == core::JoinType::kRightSemiProject;
+
   ColumnVector columns;
   PlanObjectSet columnSet;
   ColumnCP mark = nullptr;
-  PlanObjectSet buildColumns;
-  buildColumns.unionColumns(plan->columns());
-  auto joinType = probe.leftJoinType();
-  auto fanout = fanoutJoinTypeLimit(joinType, candidate.fanout);
-  // Change the join type to the right join variant.
-  switch (joinType) {
-    case JoinType::kLeft:
-      joinType = JoinType::kRight;
-      break;
-    case JoinType::kRight:
-      joinType = JoinType::kLeft;
-      break;
-    case JoinType::kLeftSemiFilter:
-      joinType = JoinType::kRightSemiFilter;
-      break;
-    case JoinType::kLeftSemiProject:
-      joinType = JoinType::kRightSemiProject;
-      break;
-    default:
-      VELOX_FAIL("Join type does not have right hash join variant");
-  }
 
-  bool buildOnly = joinType == JoinType::kRightSemiFilter ||
-      joinType == JoinType::kRightSemiProject;
   downstream = state.downstreamColumns();
   downstream.forEach([&](auto object) {
     auto column = reinterpret_cast<ColumnCP>(object);
@@ -1402,6 +1392,7 @@ void Optimization::joinByHashRight(
     columnSet.add(object);
     columns.push_back(column);
   });
+
   if (mark) {
     const_cast<Value*>(&mark->value())->trueFraction =
         std::min<float>(1, candidate.fanout);
@@ -1415,7 +1406,7 @@ void Optimization::joinByHashRight(
 
   auto* join = make<Join>(
       JoinMethod::kHash,
-      joinType,
+      rightJoinType,
       probeInput,
       buildOp,
       probe.keys,
@@ -1530,7 +1521,7 @@ RelationOpPtr Optimization::placeSingleRowDt(
       rightOp->columns().end());
   auto* join = new (queryCtx()->allocate(sizeof(Join))) Join(
       JoinMethod::kCross,
-      JoinType::kInner,
+      core::JoinType::kInner,
       plan,
       rightOp,
       {},

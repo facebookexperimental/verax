@@ -1526,7 +1526,8 @@ void filterUpdated(BaseTableCP baseTable, bool updateSelectivity = true);
 /// for the map column.
 RowTypePtr skylineStruct(BaseTableCP baseTable, ColumnCP column);
 
-/// Returns  the inverse join type, e.g. right outer from left outr.
+/// Returns  the inverse join type, e.g. right outer from left outer.
+/// TODO Move this function to Velox.
 core::JoinType reverseJoinType(core::JoinType joinType);
 
 PathCP stepsToPath(const std::vector<Step>& steps);
