@@ -28,6 +28,8 @@ namespace facebook::velox::core {
 // core:: but implementations do.
 class ITypedExpr;
 using TypedExprPtr = std::shared_ptr<const ITypedExpr>;
+
+class PartitionFunctionSpec;
 } // namespace facebook::velox::core
 
 /// Base classes for schema elements used in execution. A
@@ -507,6 +509,52 @@ struct LookupKeys {
   bool isAscending{true};
 };
 
+/// Describes how to repartition data before a TableWriter.
+struct WritePartitioning {
+  /// Columns for partitioning,. Names refer to the column names in the insert
+  /// table handle. Empty if any worker can write any row.
+  const std::vector<std::string> columns;
+
+  /// Specifies the partition function. nullptr if 'columns' is empty.
+  const std::shared_ptr<const core::PartitionFunctionSpec> partitionSpec;
+
+  /// Maximum number of workers. For example, having more workers than there are
+  /// partitions makes no sense.
+  const int32_t maxWorkers;
+};
+
+/// Representts session status for update operations. May for
+/// example encapsulate a transaction state. The minimal
+/// implementation does nothing, which amounts to all write
+/// operations being non-isolated and autocommitting. Connector
+/// specific implementations have their specific transaction functions.
+class ConnectorSession {
+  virtual ~ConnectorSession() = default;
+};
+
+using ConnectorSessionPtr = std::shared_ptr<ConnectorSession>;
+
+/// Specifies what type of write is intended when initiating or concluding a
+/// write operation.
+enum class WriteKind {
+  // Rows are added and all columns must be specified for the TableWriter. This
+  // covers insert, create table and replacing a Hive partition and any other
+  // use that adds whole rows.
+  kInsert,
+
+  // Individual rows are deleted. Only row ids as per
+  // ConnectorMetadata::rowIdHandles() are passed to the TableWriter.
+  kDelete,
+
+  // Column values in individual rows are changed. The TableWriter
+  // gets first the row ids as per ConnectorMetadata::rowIdHandles()
+  // and then new values for the columns being changed. The new values
+  // may overlap with row ids if the row id is a set of primary key
+  // columns.
+
+  kUpdate
+};
+
 class ConnectorMetadata {
  public:
   virtual ~ConnectorMetadata() = default;
@@ -568,6 +616,87 @@ class ConnectorMetadata {
 
   virtual std::shared_ptr<core::QueryCtx> makeQueryCtx(
       const std::string& queryId) {
+    VELOX_UNSUPPORTED();
+  }
+
+  /// Creates a table. 'tableName' is a name with optional 'schema.'
+  /// followed by table name. The connector gives the first part of
+  /// the three part name. The table properties are in 'options'. All
+  /// options must be understood by the connector. To create a table,
+  /// first make a ConnectorSession in a connector dependent manner,
+  /// then call createTable, then access the created layout(s) and
+  /// make an insert table handle for writing each. Insert data into
+  /// each layout and then call finishWrite on each. Normally a table
+  /// has one layout but if many exist, as in secondary indices or
+  /// materializations that are not transparently handled by an
+  /// outside system, the optimizer is expected to make plans that
+  /// write to all. In such cases the plan typically has a different
+  /// table writer for each materialization. Any transaction semantics
+  /// are connector dependent. Throws an error if the table exists,
+  /// unless 'deleteIfExists' is true, in which case the table is
+  /// silently deleted.  finishWrite should be called for all insert
+  /// table handles to complete the write also if no data is added. To
+  /// create an empty table, call createTable and then commit if the
+  /// connector is transactional. to create the table with data,
+  /// insert into all materializations, call finishWrite on each and
+  /// then commit the whole transaction if the connector requires
+  /// that.
+  void createTable(
+      const std::string& tableName,
+      const std::unordered_map<std::string, std::string>& options,
+      const ConnectorSessionPtr& session,
+      bool deleteIfExistts) {
+    VELOX_UNSUPPORTED();
+  }
+
+  /// Creates an insert table handle for use with Velox TableWriter. '
+  /// 'rowType' is the type of one row, including any partitioning or
+  /// bucketing columns. The order may be significant, for example
+  /// Hive needs partitioning columns to be last in column order. If
+  /// the write is a delete or update the row will reflect this,
+  /// starting with the columns identified by rowIdHandles().  The set
+  /// of options and their meaning is connector dependent. A connector
+  /// is expected to throw an error if it does not understand all
+  /// options. if the connector has transaction support, sets up a
+  /// transaction if one does not exist. The handle is created in one
+  /// process, which is considered to initiate the transaction. If
+  /// data is added to the table, finishWrite must be called after the
+  /// last writer is finished. Whether this autocommits a transaction
+  /// depends on the connector and session settings.
+  virtual ConnectorInsertTableHandlePtr createInsertTableHandle(
+      const TableLayout& layout,
+      const RowTypePtr& rowType,
+      const std::unordered_map<std::string, std::string>& options,
+      WriteKind kind,
+      const ConnectorSessionPtr& session) {
+    VELOX_UNSUPPORTED();
+  }
+
+  /// Returns specification for repartitioning data before the table writer
+  /// stage.
+  virtual WritePartitioning writerShuffleInfo(
+      const ConnectorInsertTableHandlePtr& handle) {
+    VELOX_UNSUPPORTED();
+  }
+
+  /// Finalizes a table write. This runs once after all the table writers have
+  /// finished. The result sets from the table writer fragments are passed as
+  /// 'writerResults'. Their format and meaning is connector specific. the
+  /// RowType is given by the outputType() of the TableWriter.
+  virtual void finishWrite(
+      const ConnectorInsertTableHandlePtr& handle,
+      const std::vector<VectorPtr>& writerResult,
+      WriteKind kind,
+      const ConnectorSessionPtr& session) {
+    VELOX_UNSUPPORTED();
+  }
+
+  /// Returns column handles whose value uniquely identifies a row for creating
+  /// and update or delete record. These may be for example some connector
+  /// specific opaque row id or primary key columns.
+  virtual std::vector<ColumnHandlePtr> rowIdHandles(
+      const TableLayout& layout,
+      WriteKind kind) {
     VELOX_UNSUPPORTED();
   }
 };
