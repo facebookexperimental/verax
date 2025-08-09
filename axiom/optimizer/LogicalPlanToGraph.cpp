@@ -25,9 +25,42 @@
 #include "velox/functions/FunctionRegistry.h"
 #include "velox/vector/VariantToVector.h"
 
+#include <iostream>
+
 namespace facebook::velox::optimizer {
 
 namespace lp = facebook::velox::logical_plan;
+
+/// Trace info to add to exception messages.
+struct ToGraphContext {
+  ToGraphContext(const lp::Expr* e) : expr(e), node(nullptr) {}
+
+  ToGraphContext(const lp::LogicalPlanNode* n) : expr(nullptr), node(n) {}
+
+  const lp::Expr* expr{nullptr};
+  const lp::LogicalPlanNode* node{nullptr};
+};
+
+std::string toGraphMessage(VeloxException::Type exceptionType, void* arg) {
+  auto ctx = reinterpret_cast<ToGraphContext*>(arg);
+  if (ctx->expr != nullptr) {
+    return fmt::format("Expr: {}", lp::ExprPrinter::toText(*ctx->expr));
+  }
+  if (ctx->node != nullptr) {
+    return fmt::format(
+        "Node: [{}] {}\n",
+        ctx->node->id(),
+        lp::PlanPrinter::summarizeToText(*ctx->node));
+  }
+  return "";
+}
+
+ExceptionContext makeExceptionContext(ToGraphContext* ctx) {
+  ExceptionContext e;
+  e.messageFunc = toGraphMessage;
+  e.arg = ctx;
+  return e;
+}
 
 void Optimization::setDerivedTableOutput(
     DerivedTableP dt,
@@ -51,7 +84,6 @@ DerivedTableP Optimization::makeQueryGraphFromLogical() {
 
   root_ = newDt();
   currentSelect_ = root_;
-
   makeQueryGraph(*logicalPlan_, kAllAllowedInDt);
   return root_;
 }
@@ -334,6 +366,16 @@ ExprCP Optimization::makeGettersOverSkyline(
     if (column) {
       expr = column;
     } else {
+      trace(kPreprocess, [&]() {
+        std::cout << "Complex function with no skyline: steps="
+                  << toPath(steps)->toString() << std::endl;
+        std::cout << "base=" << lp::ExprPrinter::toText(*base) << std::endl;
+        std::cout << "Columns=";
+        for (auto& name : logicalExprSource_->outputType()->names()) {
+          std::cout << name << " ";
+        }
+        std::cout << std::endl;
+      });
       expr = translateExpr(base);
     }
     last = steps.size();
@@ -377,6 +419,14 @@ ExprCP Optimization::makeGettersOverSkyline(
               toName("subscript"),
               Value(type, 1),
               std::move(args),
+              FunctionSet());
+          break;
+        }
+        case StepKind::kCardinality: {
+          expr = make<Call>(
+              toName("cardinality"),
+              Value(toType(INTEGER()), 1),
+              ExprVector{expr},
               FunctionSet());
           break;
         }
@@ -583,6 +633,9 @@ ExprCP Optimization::translateExpr(const lp::ExprPtr& expr) {
     return path.value();
   }
 
+  ToGraphContext ctx(expr.get());
+  ExceptionContextSetter s(makeExceptionContext(&ctx));
+
   const auto* call = expr->asUnchecked<lp::CallExpr>();
   std::string callName;
   if (call) {
@@ -723,6 +776,16 @@ std::optional<ExprCP> Optimization::translateSubfieldFunction(
     for (auto& pair : map) {
       translated[pair.first] = translateExpr(pair.second);
     }
+    trace(kPreprocess, [&]() {
+      std::cout << "Explode=" << lp::ExprPrinter::toText(*call) << std::endl;
+      std::cout << "num paths=" << paths.size() << std::endl;
+      std::cout << "translated=" << map.size() << std::endl;
+      if (!translated.empty()) {
+        std::cout << "Set function skyline=" << translated.size() << " "
+                  << map.size() << std::endl;
+      }
+    });
+
     if (!translated.empty()) {
       logicalFunctionSubfields_[call] =
           SubfieldProjections{.pathToExpr = std::move(translated)};
@@ -1021,6 +1084,11 @@ PlanObjectP Optimization::makeBaseTable(const lp::TableScanNode& tableScan) {
       if (opts_.pushdownSubfields) {
         Path::subfieldSkyline(allPaths);
         if (!allPaths.empty()) {
+          trace(kPreprocess, [&]() {
+            std::cout << "Subfields: " << baseTable->cname << "."
+                      << baseTable->schemaTable->name << " " << column->name()
+                      << ":" << allPaths.size() << std::endl;
+          });
           makeSubfieldColumns(baseTable, column, allPaths);
         }
       }
@@ -1090,7 +1158,17 @@ PlanObjectP Optimization::addProjection(const lp::ProjectNode* project) {
   logicalExprSource_ = project->onlyInput().get();
   const auto& names = project->names();
   const auto& exprs = project->expressions();
-  for (auto i : usedChannels(project)) {
+  auto channels = usedChannels(project);
+  trace(kPreprocess, [&]() {
+    for (auto i = 0; i < exprs.size(); ++i) {
+      if (std::find(channels.begin(), channels.end(), i) == channels.end()) {
+        std::cout << "P=" << project->id()
+                  << " dropped projection name=" << names[i] << " = "
+                  << lp::ExprPrinter::toText(*exprs[i]) << std::endl;
+      }
+    }
+  });
+  for (auto i : channels) {
     if (exprs[i]->isInputReference()) {
       const auto& name =
           exprs[i]->asUnchecked<lp::InputReferenceExpr>()->name();
@@ -1344,6 +1422,8 @@ DerivedTableP Optimization::translateUnion(
 PlanObjectP Optimization::makeQueryGraph(
     const lp::LogicalPlanNode& node,
     uint64_t allowedInDt) {
+  ToGraphContext ctx(&node);
+  ExceptionContextSetter(makeExceptionContext(&ctx));
   switch (node.kind()) {
     case lp::NodeKind::kValues:
       VELOX_NYI(

@@ -250,6 +250,9 @@ core::TypedExprPtr Optimization::toAnd(const ExprVector& exprs) {
 }
 
 bool Optimization::isMapAsStruct(Name table, Name column) {
+  if (opts_.allMapsAsStruct) {
+    return true;
+  }
   auto it = opts_.mapAsStruct.find(table);
   if (it == opts_.mapAsStruct.end()) {
     return false;

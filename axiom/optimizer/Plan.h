@@ -498,6 +498,10 @@ struct OptimizerOptions {
   /// columns in table scan.
   bool pushdownSubfields{false};
 
+  /// True if all map columns where a known set of keys is accessed should be
+  /// extracted as structs.
+  bool allMapsAsStruct{false};
+
   /// Map from table name to  list of map columns to be read as structs unless
   /// the whole map is accessed as a map.
   std::unordered_map<std::string, std::vector<std::string>> mapAsStruct;
@@ -554,6 +558,7 @@ class Optimization {
   static constexpr int32_t kRetained = 1;
   static constexpr int32_t kExceededBest = 2;
   static constexpr int32_t kSample = 4;
+  static constexpr int32_t kPreprocess = 8;
 
   Optimization(
       const logical_plan::LogicalPlanNode& plan,
@@ -713,6 +718,13 @@ class Optimization {
 
   /// Produces trace output if event matches 'traceFlags_'.
   void trace(int32_t event, int32_t id, const Cost& cost, RelationOp& plan);
+
+  template <typename Func>
+  void trace(int32_t event, Func f) {
+    if ((opts_.traceFlags & event) != 0) {
+      f();
+    }
+  }
 
  private:
   static constexpr uint64_t kAllAllowedInDt = ~0UL;
