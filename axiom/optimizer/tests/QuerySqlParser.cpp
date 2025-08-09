@@ -203,9 +203,7 @@ lp::LogicalPlanNodePtr toPlanNode(
       pool, rowType, nullptr, 1, std::vector<VectorPtr>{})};
 
   return std::make_shared<lp::ValuesNode>(
-      queryContext.nextNodeId(),
-      rowType,
-      std::vector<Variant>{Variant::null(TypeKind::ROW)});
+      queryContext.nextNodeId(), std::move(vectors));
 }
 
 lp::LogicalPlanNodePtr toPlanNode(

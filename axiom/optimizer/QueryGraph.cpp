@@ -54,6 +54,8 @@ std::string Column::toString() const {
   Name cname = !relation_ ? ""
       : relation_->type() == PlanType::kTable
       ? relation_->as<BaseTable>()->cname
+      : relation_->type() == PlanType::kValuesTable
+      ? relation_->as<ValuesTable>()->cname
       : relation_->type() == PlanType::kDerivedTable
       ? relation_->as<DerivedTable>()->cname
       : "--";
@@ -162,6 +164,17 @@ std::string BaseTable::toString() const {
   std::stringstream out;
   out << "{" << PlanObject::toString();
   out << schemaTable->name << " " << cname << "}";
+  return out.str();
+}
+
+void ValuesTable::addJoinedBy(JoinEdgeP join) {
+  pushBackUnique(joinedBy, join);
+}
+
+std::string ValuesTable::toString() const {
+  std::stringstream out;
+  out << "{" << PlanObject::toString();
+  out << values.id() << " " << cname << "}";
   return out.str();
 }
 

@@ -27,6 +27,7 @@
 #include "velox/exec/tests/utils/TpchQueryBuilder.h"
 #include "velox/expression/ExprToSubfieldFilter.h"
 #include "velox/type/tests/SubfieldFiltersBuilder.h"
+#include "velox/vector/VariantToVector.h"
 
 DEFINE_int32(num_repeats, 1, "Number of repeats for optimization timing");
 
@@ -831,6 +832,234 @@ TEST_F(PlanTest, except) {
   checkSame(logicalPlan, referencePlan);
 }
 
+TEST_F(PlanTest, values) {
+  auto nationType =
+      ROW({"n_nationkey", "n_regionkey", "n_name", "n_comment"},
+          {BIGINT(), BIGINT(), VARCHAR(), VARCHAR()});
+
+  const std::vector<std::string>& names = nationType->names();
+
+  auto rowVector = makeRowVector(
+      names,
+      {
+          makeFlatVector<int64_t>({10, 20, 30}),
+          makeFlatVector<int64_t>({1, 2, 3}),
+          makeFlatVector<StringView>({"nation1", "nation2", "nation3"}),
+          makeFlatVector<StringView>({"comment1", "comment2", "comment3"}),
+      });
+
+  lp::PlanBuilder::Context ctx{exec::test::kHiveConnectorId};
+
+  {
+    auto makeLogicalPlan = [&](const std::string& filter) {
+      return lp::PlanBuilder(ctx)
+          .values({rowVector})
+          .filter(filter)
+          .project({"n_nationkey", "n_regionkey"});
+    };
+
+    auto logicalPlanExcept =
+        lp::PlanBuilder(ctx)
+            .setOperation(
+                lp::SetOperation::kExcept,
+                {
+                    makeLogicalPlan("n_nationkey < 21"),
+                    makeLogicalPlan("n_nationkey > 16"),
+                    makeLogicalPlan("n_nationkey <= 5"),
+                })
+            .project({"n_nationkey", "n_regionkey + 1 as rk"})
+            .filter("cast(rk as integer) in (1, 2, 4, 5)")
+            .build();
+
+    auto referencePlanExcept =
+        exec::test::PlanBuilder(pool_.get())
+            .values({rowVector})
+            .filter("n_nationkey > 5 and n_nationkey <= 16")
+            .project({"n_nationkey", "n_regionkey + 1 as rk"})
+            .filter("rk in (1, 2, 4, 5)")
+            .planNode();
+
+    checkSame(logicalPlanExcept, referencePlanExcept);
+  }
+
+  // In this test, we verify that the optimizer can handle
+  // combinations of logical plans with different leaf types (table scan vs
+  // values) and that it can generate the correct physical plan for each
+  // combination.
+  // We check following cases:
+  // 1. t1 join t2
+  // 2. t1 join (t2 join t3)
+  // 3. t1 join (t2 join (t3 join t4))
+  // t* can be either table scan or values.
+  // We don't check produced plan, only that it results in the same rows as
+  // correct exection plan.
+
+  auto makeLogicalPlan = [&](uint8_t leafType,
+                             const std::string& filter,
+                             const std::string& alias) {
+    auto plan = lp::PlanBuilder(ctx);
+    if (leafType == 0) {
+      plan.tableScan("nation", names);
+    } else {
+      plan.values({rowVector});
+    }
+    return plan.filter(filter).project({
+        fmt::format("n_nationkey AS {}1", alias),
+        fmt::format("n_regionkey AS {}2", alias),
+        fmt::format("n_comment AS {}3", alias),
+    });
+  };
+
+  auto idGenerator = std::make_shared<core::PlanNodeIdGenerator>();
+  auto makePhysicalPlan =
+      [&](int leafType, const std::string& filter, const std::string& alias) {
+        auto plan = exec::test::PlanBuilder(idGenerator, pool_.get());
+        if (leafType == 0) {
+          plan.tableScan("nation", nationType);
+        } else {
+          plan.values({rowVector});
+        }
+        return plan.filter(filter).project({
+            fmt::format("n_nationkey AS {}1", alias),
+            fmt::format("n_regionkey AS {}2", alias),
+            fmt::format("n_comment AS {}3", alias),
+        });
+      };
+
+  auto numJoins = 1;
+  auto numCombinations = 1 << (numJoins + 1);
+  for (int32_t i = 0; i < numCombinations; ++i) {
+    const int leafType1 = bits::isBitSet(&i, 0);
+    const int leafType2 = bits::isBitSet(&i, 1);
+
+    SCOPED_TRACE(fmt::format("Join: {} x {}", leafType1, leafType2));
+
+    auto logicalPlan =
+        makeLogicalPlan(leafType1, "n_regionkey < 3", "x")
+            .join(
+                makeLogicalPlan(leafType2, "n_regionkey > 1", "y"),
+                "x2 = y2",
+                lp::JoinType::kInner)
+            .project({"x1", "x2", "y3"})
+            .build();
+
+    auto referencePlan =
+        makePhysicalPlan(leafType1, "n_regionkey < 3", "x")
+            .hashJoin(
+                {"x2"},
+                {"y2"},
+                makePhysicalPlan(leafType2, "n_regionkey > 1", "y").planNode(),
+                "",
+                {"x1", "x2", "y3"})
+            .planNode();
+
+    checkSame(logicalPlan, referencePlan);
+  }
+
+  numJoins = 2;
+  numCombinations = 1 << (numJoins + 1);
+  for (int32_t i = 0; i < numCombinations; ++i) {
+    const int leafType1 = bits::isBitSet(&i, 0);
+    const int leafType2 = bits::isBitSet(&i, 1);
+    const int leafType3 = bits::isBitSet(&i, 2);
+
+    SCOPED_TRACE(
+        fmt::format("Join: {} x {} x {}", leafType1, leafType2, leafType3));
+
+    auto logicalPlan =
+        makeLogicalPlan(leafType1, "n_regionkey < 3", "x")
+            .join(
+                makeLogicalPlan(leafType2, "n_regionkey < 3", "y")
+                    .join(
+                        makeLogicalPlan(leafType3, "n_regionkey > 1", "z"),
+                        "y2 = z2",
+                        lp::JoinType::kInner),
+                "x2 = y2",
+                lp::JoinType::kInner)
+            .project({"x1", "x2", "y1", "z3"})
+            .build();
+
+    auto referencePlan =
+        makePhysicalPlan(leafType1, "n_regionkey < 3", "x")
+            .hashJoin(
+                {"x2"},
+                {"y2"},
+                makePhysicalPlan(leafType2, "n_regionkey < 3", "y")
+                    .hashJoin(
+                        {"y2"},
+                        {"z2"},
+                        makePhysicalPlan(leafType3, "n_regionkey > 1", "z")
+                            .planNode(),
+                        "",
+                        {"y1", "y2", "z3"})
+                    .planNode(),
+                "",
+                {"x1", "x2", "y1", "z3"})
+            .planNode();
+
+    checkSame(logicalPlan, referencePlan);
+  }
+
+  numJoins = 3;
+  numCombinations = 1 << (numJoins + 1);
+  for (int32_t i = 0; i < numCombinations; ++i) {
+    const int leafType1 = bits::isBitSet(&i, 0);
+    const int leafType2 = bits::isBitSet(&i, 1);
+    const int leafType3 = bits::isBitSet(&i, 2);
+    const int leafType4 = bits::isBitSet(&i, 3);
+
+    SCOPED_TRACE(fmt::format(
+        "Join: {} x {} x {} x {}", leafType1, leafType2, leafType3, leafType4));
+
+    auto logicalPlan =
+        makeLogicalPlan(leafType1, "n_regionkey < 3", "x")
+            .join(
+                makeLogicalPlan(leafType2, "n_regionkey < 3", "y")
+                    .join(
+                        makeLogicalPlan(leafType3, "n_regionkey < 3", "z")
+                            .join(
+                                makeLogicalPlan(
+                                    leafType4, "n_regionkey > 1", "w"),
+                                "z2 == w2",
+                                lp::JoinType::kInner)
+                            .project({"z1", "z2", "w3"}),
+                        "y2 == z2",
+                        lp::JoinType::kInner)
+                    .project({"y1", "y2", "z1", "w3"}),
+                "x2 = y2",
+                lp::JoinType::kInner)
+            .project({"x1", "x2", "y1", "z1", "w3"})
+            .build();
+
+    auto referencePlan =
+        makePhysicalPlan(leafType1, "n_regionkey < 3", "x")
+            .hashJoin(
+                {"x2"},
+                {"y2"},
+                makePhysicalPlan(leafType2, "n_regionkey < 3", "y")
+                    .hashJoin(
+                        {"y2"},
+                        {"z2"},
+                        makePhysicalPlan(leafType3, "n_regionkey < 3", "z")
+                            .hashJoin(
+                                {"z2"},
+                                {"w2"},
+                                makePhysicalPlan(
+                                    leafType4, "n_regionkey > 1", "w")
+                                    .planNode(),
+                                "",
+                                {"z1", "z2", "w3"})
+                            .planNode(),
+                        "",
+                        {"y1", "y2", "z1", "w3"})
+                    .planNode(),
+                "",
+                {"x1", "x2", "y1", "z1", "w3"})
+            .planNode();
+
+    checkSame(logicalPlan, referencePlan);
+  }
+}
 } // namespace
 } // namespace facebook::velox::optimizer
 

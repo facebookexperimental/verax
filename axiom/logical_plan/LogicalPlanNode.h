@@ -18,6 +18,7 @@
 #include "axiom/logical_plan/Expr.h"
 #include "velox/common/Enums.h"
 #include "velox/type/Variant.h"
+#include "velox/vector/ComplexVector.h"
 
 namespace facebook::velox::logical_plan {
 
@@ -111,24 +112,38 @@ class LogicalPlanNode {
 /// A table whose content is embedded in the plan.
 class ValuesNode : public LogicalPlanNode {
  public:
+  using Rows = std::vector<Variant>;
+  using Values = std::vector<RowVectorPtr>;
+  using Data = std::variant<Rows, Values>;
+
   /// @param rowType Output schema. A list of column names and types. All names
   /// must be non-empty and unique.
   /// @param rows A list of rows. Each row is a list of values, one per column.
   /// The number, order and types of columns must match 'rowType'.
-  ValuesNode(
-      const std::string& id,
-      const RowTypePtr& rowType,
-      std::vector<Variant> rows);
+  ValuesNode(std::string id, RowTypePtr rowType, std::vector<Variant> rows);
 
-  const std::vector<Variant>& rows() const {
-    return rows_;
+  /// @param values A list of values. Each value is a list of columns.
+  /// Each column is list of values, one per row.
+  /// Each RowVectorPtr must have the same type,
+  /// type should have non-empty and unique names.
+  /// Memory pools used for RowVector's allocation should live up to execution
+  /// of the velox::exec::Values
+  ValuesNode(std::string id, std::vector<RowVectorPtr> values);
+
+  uint64_t cardinality() const {
+    return cardinality_;
+  }
+
+  const Data& data() const {
+    return data_;
   }
 
   void accept(const PlanNodeVisitor& visitor, PlanNodeVisitorContext& context)
       const override;
 
  private:
-  const std::vector<Variant> rows_;
+  const uint64_t cardinality_ = 0;
+  const Data data_;
 };
 
 using ValuesNodePtr = std::shared_ptr<const ValuesNode>;

@@ -261,6 +261,7 @@ enum class RelType {
   kOrderBy,
   kUnionAll,
   kLimit,
+  kValues,
 };
 
 /// Represents a relation (table) that is either physically stored or is the

@@ -752,6 +752,8 @@ class Optimization {
 
   PlanObjectP makeBaseTable(const logical_plan::TableScanNode& tableScan);
 
+  PlanObjectP makeValuesTable(const logical_plan::ValuesNode& values);
+
   // Decomposes complex type columns into parts projected out as top
   // level if subfield pushdown is on.
   void makeSubfieldColumns(
@@ -1199,6 +1201,10 @@ class Optimization {
       const UnionAll& unionAll,
       velox::runner::ExecutableFragment& fragment,
       std::vector<velox::runner::ExecutableFragment>& stages);
+
+  core::PlanNodePtr makeValues(
+      const Values& values,
+      runner::ExecutableFragment& fragment);
 
   // Makes a tree of PlanNode for a tree of
   // RelationOp. 'fragment' is the fragment that 'op'
