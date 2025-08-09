@@ -265,6 +265,28 @@ template <typename T>
 core::TypedExprPtr makeKey(const TypePtr& type, T v) {
   return std::make_shared<core::ConstantTypedExpr>(type, variant(v));
 }
+
+core::TypedExprPtr createArrayForInList(
+    const Call* call,
+    const TypePtr& elementType) {
+  std::vector<variant> arrayElements;
+  arrayElements.reserve(call->args().size() - 1);
+  for (size_t i = 1; i < call->args().size(); ++i) {
+    auto arg = call->args().at(i);
+    VELOX_USER_CHECK(
+        elementType->equivalent(*arg->value().type),
+        "All elements of the IN list must have the same type got {} and {}",
+        elementType->toString(),
+        arg->value().type->toString());
+    VELOX_USER_CHECK_EQ(arg->type(), PlanType::kLiteral);
+    arrayElements.push_back(arg->as<Literal>()->literal());
+  }
+  auto arrayVector = variantToVector(
+      ARRAY(elementType),
+      variant::array(arrayElements),
+      queryCtx()->optimization()->evaluator()->pool());
+  return std::make_shared<core::ConstantTypedExpr>(arrayVector);
+}
 } // namespace
 
 core::TypedExprPtr stepToGetter(Step step, core::TypedExprPtr arg) {
@@ -384,13 +406,22 @@ core::TypedExprPtr Optimization::toTypedExpr(ExprCP expr) {
     case PlanType::kCall: {
       std::vector<core::TypedExprPtr> inputs;
       auto call = expr->as<Call>();
-      for (auto arg : call->args()) {
-        inputs.push_back(toTypedExpr(arg));
+
+      if (call->name() == toName("in")) {
+        VELOX_USER_CHECK_GE(call->args().size(), 2);
+        inputs.push_back(toTypedExpr(call->args().at(0)));
+        inputs.push_back(createArrayForInList(call, inputs.back()->type()));
+      } else {
+        for (auto arg : call->args()) {
+          inputs.push_back(toTypedExpr(arg));
+        }
       }
+
       if (call->name() == toName("cast")) {
         return std::make_shared<core::CastTypedExpr>(
             toTypePtr(expr->value().type), std::move(inputs), false);
       }
+
       return std::make_shared<core::CallTypedExpr>(
           toTypePtr(expr->value().type), std::move(inputs), call->name());
     }

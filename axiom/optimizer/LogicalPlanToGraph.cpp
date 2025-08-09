@@ -549,6 +549,10 @@ const char* specialFormCallName(const lp::SpecialFormExpr* form) {
       return "if";
     case lp::SpecialForm::kSwitch:
       return "switch";
+    case lp::SpecialForm::kIn:
+      return "in";
+    case lp::SpecialForm::kExists:
+      return "exists";
     default:
       VELOX_UNREACHABLE(lp::SpecialFormName::toName(form->form()));
   }
