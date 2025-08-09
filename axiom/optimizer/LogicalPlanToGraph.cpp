@@ -977,9 +977,13 @@ PlanObjectP Optimization::wrapInDt(const lp::LogicalPlanNode& node) {
 }
 
 PlanObjectP Optimization::makeBaseTable(const lp::TableScanNode& tableScan) {
-  const auto* schemaTable = schema_.findTable(tableScan.tableName());
+  const auto* schemaTable =
+      schema_.findTable(tableScan.connectorId(), tableScan.tableName());
   VELOX_CHECK_NOT_NULL(
-      schemaTable, "Table not found: {}", tableScan.tableName());
+      schemaTable,
+      "Table not found: {} via connector {}",
+      tableScan.tableName(),
+      tableScan.connectorId());
 
   auto* baseTable = make<BaseTable>();
   baseTable->cname = newCName("t");

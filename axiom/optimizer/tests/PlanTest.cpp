@@ -113,8 +113,7 @@ class PlanTest : public virtual test::ParquetTpchTest,
     gflags::FlagSaver saver;
     FLAGS_num_workers = 1;
 
-    schema_ = std::make_shared<velox::optimizer::SchemaResolver>(
-        defaultConnector == nullptr ? testConnector_ : defaultConnector, "");
+    schema_ = std::make_shared<velox::optimizer::SchemaResolver>();
 
     auto plan = planVelox(logicalPlan).plan;
 
@@ -277,6 +276,37 @@ TEST_F(PlanTest, rejectedFilters) {
 
   auto matcher =
       core::PlanMatcherBuilder().tableScan().filter().project().build();
+
+  ASSERT_TRUE(matcher->match(plan));
+}
+
+TEST_F(PlanTest, multipleConnectors) {
+  auto extraConnector = std::make_shared<connector::TestConnector>("extra");
+  connector::registerConnector(extraConnector);
+  SCOPE_EXIT {
+    connector::unregisterConnector("extra");
+  };
+
+  testConnector_->addTable("table1", ROW({"a"}, {BIGINT()}));
+  extraConnector->addTable("table2", ROW({"b"}, {BIGINT()}));
+
+  lp::PlanBuilder::Context context(kTestConnectorId);
+  auto logicalPlan =
+      lp::PlanBuilder(context)
+          .tableScan("table1")
+          .join(
+              lp::PlanBuilder(context).tableScan("extra", "table2"),
+              "a = b",
+              lp::JoinType::kInner)
+          .build();
+  auto plan = toSingleNodePlan(logicalPlan);
+
+  auto matcher =
+      core::PlanMatcherBuilder()
+          .tableScan("table1")
+          .hashJoin(core::PlanMatcherBuilder().tableScan("table2").build())
+          .project()
+          .build();
 
   ASSERT_TRUE(matcher->match(plan));
 }
