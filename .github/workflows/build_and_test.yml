@@ -58,12 +58,15 @@ jobs:
         run: |
           mkdir -p "$CCACHE_DIR"
 
-      # Get ccache from stash
+      # Get ccache from stash with better key strategy
       - name: Get Ccache Stash
         uses: apache/infrastructure-actions/stash/restore@3354c1565d4b0e335b78a76aedd82153a9e144d4
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-ubuntu-debug-default-gcc
+          key: ccache-ubuntu-debug-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt', 'velox/**/*.cpp', 'velox/**/*.h', 'axiom/**/*.cpp', 'axiom/**/*.h') }}
+          restore-keys: |
+            ccache-ubuntu-debug-${{ runner.os }}-
+            ccache-ubuntu-debug-
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -77,9 +80,8 @@ jobs:
           git config --global --add safe.directory "/__w/verax/verax"
           git config --global --add safe.directory "*"
 
-      - name: Clear CCache Statistics
-        run: |
-          ccache -sz
+      - name: Zero ccache statistics
+        run: ccache -sz
 
       # Build Verax
       - name: Build Verax Debug
@@ -88,28 +90,26 @@ jobs:
           MAKEFLAGS: NUM_THREADS=8 MAX_HIGH_MEM_JOBS=4 MAX_LINK_JOBS=4
           CPU_TARGET: "avx"
         run: |
-          # Build with reduced parallelism
-          make debug
+          # Build with reduced parallelism and explicit ccache
+          make debug EXTRA_CMAKE_FLAGS="-DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache"
 
       # Display ccache statistics after build
-      - name: CCache Statistics After Build
+      - name: Ccache after
         if: always()  # Run even if build failed
-        run: |
-          echo "CCache statistics after build:"
-          ccache -vs
+        run: ccache -s
 
       # Save ccache for future runs
       - name: Save ccache
         uses: apache/infrastructure-actions/stash/save@3354c1565d4b0e335b78a76aedd82153a9e144d4
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-ubuntu-debug-default-gcc
+          key: ccache-ubuntu-debug-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt', 'velox/**/*.cpp', 'velox/**/*.h', 'axiom/**/*.cpp', 'axiom/**/*.h') }}
 
       # Run Verax tests (excluding velox tests)
       - name: Run Debug Tests
         working-directory: _build/debug
         env:
-          # TODO: Fix failing tests and remove them from the GTEST_FILTER exclusion list - tracked in issue #204 (https://github.com/facebookexperimental/verax/issues/204)
+          # TODO: Fix failing tests and remove them from the GTEST_FILTER exclusion list - tracked in issue (https://github.com/facebookexperimental/verax/issues/204)
           GTEST_FILTER: "-TpchPlanTest.q01:TpchPlanTest.q03:TpchPlanTest.q05:HiveQueriesTest.basic:PlanTest.filterImport:PlanTest.intersect:PlanTest.except"
         run: |
           ctest -j 8 --output-on-failure --no-tests=error
