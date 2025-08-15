@@ -50,6 +50,9 @@ set(VELOX_DEPENDENCY_SOURCE
     AUTO
     CACHE STRING "Default dependency source: AUTO SYSTEM or BUNDLED.")
 
+# Add ccache support option
+option(VERAX_ENABLE_CCACHE "Use ccache if installed." ON)
+
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
 set(BOOST_INCLUDE_LIBRARIES
@@ -108,6 +111,79 @@ if(COMMAND_STATUS EQUAL "1")
 endif()
 message("Setting CMAKE_CXX_FLAGS=${SCRIPT_CXX_FLAGS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SCRIPT_CXX_FLAGS}")
+
+# Configure ccache if enabled
+message(STATUS "🔧 Configuring ccache support...")
+message(STATUS "  VERAX_ENABLE_CCACHE: ${VERAX_ENABLE_CCACHE}")
+message(STATUS "  CMAKE_C_COMPILER_LAUNCHER: ${CMAKE_C_COMPILER_LAUNCHER}")
+message(STATUS "  CMAKE_CXX_COMPILER_LAUNCHER: ${CMAKE_CXX_COMPILER_LAUNCHER}")
+message(STATUS "  CMAKE_CUDA_COMPILER_LAUNCHER: ${CMAKE_CUDA_COMPILER_LAUNCHER}")
+
+if(VERAX_ENABLE_CCACHE
+   AND NOT CMAKE_C_COMPILER_LAUNCHER
+   AND NOT CMAKE_CXX_COMPILER_LAUNCHER
+   AND NOT CMAKE_CUDA_COMPILER_LAUNCHER)
+
+  message(STATUS "🔍 Searching for ccache executable...")
+  find_program(CCACHE_FOUND ccache)
+
+  if(CCACHE_FOUND)
+    message(STATUS "✅ ccache found and enabled!")
+    message(STATUS "  📍 ccache location: ${CCACHE_FOUND}")
+
+    # Check ccache version
+    execute_process(
+      COMMAND ${CCACHE_FOUND} --version
+      OUTPUT_VARIABLE CCACHE_VERSION_OUTPUT
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    string(REGEX MATCH "ccache version [0-9]+\\.[0-9]+\\.[0-9]+" CCACHE_VERSION "${CCACHE_VERSION_OUTPUT}")
+    message(STATUS "  📦 ${CCACHE_VERSION}")
+
+    set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE_FOUND})
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_FOUND})
+    set(CMAKE_CUDA_COMPILER_LAUNCHER ${CCACHE_FOUND})
+
+    # Configure ccache settings
+    set(ENV{CCACHE_COMMENTS} "1")
+    message(STATUS "  ⚙️  CCACHE_COMMENTS=1 (preserves comments)")
+
+    # Show ccache configuration
+    execute_process(
+      COMMAND ${CCACHE_FOUND} --show-config
+      OUTPUT_VARIABLE CCACHE_CONFIG
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    message(STATUS "  📋 ccache configuration:")
+    message(STATUS "     Cache directory: $ENV{CCACHE_DIR}")
+    if(NOT "$ENV{CCACHE_DIR}" STREQUAL "")
+      message(STATUS "     Using custom CCACHE_DIR: $ENV{CCACHE_DIR}")
+    endif()
+
+  else()
+    message(WARNING "❌ ccache not found! Install ccache for faster builds:")
+    message(WARNING "  📦 On Ubuntu/Debian: sudo apt install ccache")
+    message(WARNING "  📦 On macOS: brew install ccache")
+    message(WARNING "  📦 On CentOS/RHEL: sudo dnf install ccache")
+  endif()
+
+else()
+  if(CMAKE_C_COMPILER_LAUNCHER OR CMAKE_CXX_COMPILER_LAUNCHER OR CMAKE_CUDA_COMPILER_LAUNCHER)
+    message(STATUS "✅ ccache already configured by build system!")
+    message(STATUS "  🎯 Existing compiler launcher detected:")
+    message(STATUS "     C: ${CMAKE_C_COMPILER_LAUNCHER}")
+    message(STATUS "     CXX: ${CMAKE_CXX_COMPILER_LAUNCHER}")
+    message(STATUS "     CUDA: ${CMAKE_CUDA_COMPILER_LAUNCHER}")
+    if(CMAKE_CXX_COMPILER_LAUNCHER STREQUAL "ccache")
+      message(STATUS "  🚀 ccache is active and will accelerate builds!")
+    endif()
+  else()
+    message(STATUS "❌ ccache disabled")
+    if(NOT VERAX_ENABLE_CCACHE)
+      message(STATUS "  💡 Enable with: -DVERAX_ENABLE_CCACHE=ON")
+    endif()
+  endif()
+endif()
 
 message("FINAL CMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}")
 

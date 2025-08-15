@@ -59,7 +59,18 @@ cmake: submodules	#: Use CMake to create a Makefile build system
 		${EXTRA_CMAKE_FLAGS}
 
 build:            #: Build the software based in BUILD_DIR and BUILD_TYPE variables
+	@echo "🔨 Starting build..."
+	@if command -v ccache >/dev/null 2>&1; then \
+		echo "📊 Pre-build ccache stats:"; \
+		ccache -s; \
+		echo ""; \
+	fi
 	cmake --build $(BUILD_BASE_DIR)/$(BUILD_DIR) -j $(NUM_THREADS)
+	@if command -v ccache >/dev/null 2>&1; then \
+		echo ""; \
+		echo "📊 Post-build ccache stats:"; \
+		ccache -s; \
+	fi
 
 debug:            #: Build with debugging symbols
 	$(MAKE) cmake BUILD_DIR=debug BUILD_TYPE=Debug

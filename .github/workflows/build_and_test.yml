@@ -49,21 +49,59 @@ jobs:
     container:
       image: ghcr.io/facebookincubator/velox-dev:centos9
     env:
-      CCACHE_DIR: ${{ github.workspace }}/ccache
+      CCACHE_DIR: /__w/verax/verax/ccache
       VELOX_DEPENDENCY_SOURCE: SYSTEM
       ICU_SOURCE: SYSTEM
     steps:
       - name: Ensure Ccache Dir Exists
-        working-directory: ${{ github.workspace }}
         run: |
+          echo "🔧 Setting up ccache directory..."
+          echo "📁 CCACHE_DIR: $CCACHE_DIR"
+          echo "📁 github.workspace: ${{ github.workspace }}"
+          echo "📁 Current working dir: $(pwd)"
+
+          echo "🔍 Investigating path relationships..."
+          echo "📍 github.workspace realpath: $(realpath '${{ github.workspace }}')"
+          echo "📍 current dir realpath: $(realpath '$(pwd)')"
+          echo "📍 Are they the same? $([ '$(realpath '${{ github.workspace }}')' = '$(realpath '$(pwd)')' ] && echo 'YES' || echo 'NO')"
+
+          echo "🔗 Checking symlinks..."
+          ls -la /home/runner/work/ 2>/dev/null | head -5 || echo "No /home/runner/work"
+          ls -la /__w/ 2>/dev/null | head -5 || echo "No /__w"
+
           mkdir -p "$CCACHE_DIR"
+
+          # Verify the directory exists and show its absolute path
+          echo "📍 Absolute ccache path: $(readlink -f "$CCACHE_DIR")"
+          ls -la "$CCACHE_DIR" || echo "Directory created but empty (expected)"
 
       # Get ccache from stash
       - name: Get Ccache Stash
+        id: restore-cache
         uses: apache/infrastructure-actions/stash/restore@3354c1565d4b0e335b78a76aedd82153a9e144d4
         with:
-          path: ${{ env.CCACHE_DIR }}
+          path: /__w/verax/verax/ccache
           key: ccache-ubuntu-debug-default-gcc
+
+      - name: Verify Cache Restore
+        run: |
+          echo "🔍 Verifying cache restore..."
+          echo "📊 Cache restore result: ${{ steps.restore-cache.outputs.stash-hit }}"
+          echo "📁 CCACHE_DIR: $CCACHE_DIR"
+          echo "📁 Absolute path: $(readlink -f "$CCACHE_DIR")"
+
+          if [ -d "$CCACHE_DIR" ]; then
+            echo "✅ Cache directory exists"
+            echo "📦 Files in cache: $(find "$CCACHE_DIR" -type f 2>/dev/null | wc -l)"
+            echo "💾 Cache size: $(du -sh "$CCACHE_DIR" 2>/dev/null | cut -f1)"
+            echo "📂 Directory contents:"
+            ls -la "$CCACHE_DIR" | head -10
+          else
+            echo "❌ Cache directory does not exist!"
+          fi
+
+          echo "🔧 Current ccache config:"
+          ccache --show-config | grep "cache_dir"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -77,32 +115,270 @@ jobs:
           git config --global --add safe.directory "/__w/verax/verax"
           git config --global --add safe.directory "*"
 
-      - name: Clear CCache Statistics
+      - name: Fix Compiler Environment & Clear Cache
         run: |
+          echo "🐛 ROOT CAUSE IDENTIFIED: gcc-toolset-12 not activated!"
+          echo "======================================================="
+
+          echo "❌ BEFORE activation (broken state):"
+          echo "  PATH: $PATH"
+          which gcc g++ ccache 2>/dev/null || echo "  🚨 MISSING: gcc/g++ not found!"
+
+          # Properly activate gcc-toolset-12 environment
+          echo ""
+          echo "🔧 ACTIVATING gcc-toolset-12..."
+          source /opt/rh/gcc-toolset-12/enable
+
+          # Export the environment for subsequent steps
+          echo "/opt/rh/gcc-toolset-12/root/bin" >> $GITHUB_PATH
+
+          echo ""
+          echo "✅ AFTER activation (fixed state):"
+          echo "  PATH: $PATH"
+          which gcc g++ ccache || echo "  Still missing tools!"
+          gcc --version | head -1 2>/dev/null || echo "  gcc version check failed"
+          g++ --version | head -1 2>/dev/null || echo "  g++ version check failed"
+          ccache --version | head -1 2>/dev/null || echo "  ccache version check failed"
+
+          echo ""
+          echo "🔧 Our Makefile ccache detection:"
+          grep -A5 -B5 'USE_CCACHE' Makefile || echo "No ccache logic found"
+
+          echo ""
+          echo "✅ Compiler environment FIXED. Clearing ccache stats..."
           ccache -sz
 
-      # Build Verax
+          echo ""
+          echo "🔍 INVESTIGATING: Why 0 cache hits AND 0 misses?"
+          echo "This suggests ccache is NOT being invoked at all during build."
+          echo ""
+          echo "🧪 Let's trace exactly what cmake is doing with ccache..."
+
+      # Build Verax Debug with FBCODE-STYLE ccache configuration
       - name: Build Verax Debug
         id: build-verax
         env:
           MAKEFLAGS: NUM_THREADS=8 MAX_HIGH_MEM_JOBS=4 MAX_LINK_JOBS=4
           CPU_TARGET: "avx"
+          # Use fbcode approach: directly set compiler launchers via environment
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
+          # Aggressive ccache settings to fix 0% hit rate
+          CCACHE_BASEDIR: /__w/verax/verax
+          CCACHE_NOHASHDIR: true
+          CCACHE_COMPILERCHECK: content
+          CCACHE_SLOPPINESS: time_macros,file_stat_matches,include_file_mtime,include_file_ctime,file_macro,random_seed
         run: |
-          # Build with reduced parallelism
-          make debug
+          echo "🚀 APPLYING AGGRESSIVE CCACHE SETTINGS TO FIX 0% HIT RATE"
+          echo "=========================================================="
+
+          echo "🔧 Applied ccache environment variables:"
+          env | grep CCACHE_ | sort
+
+          echo ""
+          echo "📊 Pre-build ccache stats:"
+          ccache -s
+
+          echo ""
+          echo "🧪 DEEP INVESTIGATION: Is cmake actually using ccache?"
+
+          # Step 1: Configure the build and examine cmake output
+          echo "🔧 Step 1: Configure cmake and see what it says about ccache..."
+          make cmake BUILD_DIR=debug BUILD_TYPE=Debug 2>&1 | grep -E "(ccache|compiler|launcher)" || echo "No ccache mentions in cmake output"
+
+          # Step 2: Check the actual cmake cache file
+          echo ""
+          echo "🔍 Step 2: Check what cmake cache says about compiler launchers..."
+          if [ -f "_build/debug/CMakeCache.txt" ]; then
+            echo "CMAKE_C_COMPILER_LAUNCHER from cache:"
+            grep "CMAKE_C_COMPILER_LAUNCHER" _build/debug/CMakeCache.txt || echo "Not found in cache"
+            echo "CMAKE_CXX_COMPILER_LAUNCHER from cache:"
+            grep "CMAKE_CXX_COMPILER_LAUNCHER" _build/debug/CMakeCache.txt || echo "Not found in cache"
+          else
+            echo "❌ CMakeCache.txt not found!"
+          fi
+
+          # Step 3: Test with a simple compile command
+          echo ""
+          echo "🧪 Step 3: Manual compilation test to see if ccache is invoked..."
+          if [ -f "axiom/logical_plan/Expr.cpp" ]; then
+            cd _build/debug
+            # Try to manually compile one file with VERBOSE to see the actual command
+            echo "Attempting single file compilation with VERBOSE=1..."
+            timeout 30s make VERBOSE=1 velox_fe_logical_plan 2>&1 | head -30 | grep -E "(ccache|g\+\+|compiler)" || echo "No ccache detected in compilation commands"
+            cd - > /dev/null
+          fi
+
+          echo ""
+          echo "🏗️ Starting full build: make debug"
+          echo "🔍 Will monitor if ccache gets invoked during actual build..."
+
+          # Monitor ccache during build with immediate output
+          echo "🔍 Starting ccache monitor (will check every 10 seconds)..."
+          (
+            # Flush output immediately and check more frequently
+            exec > >(stdbuf -oL cat)
+            echo "📊 Monitor started at $(date)"
+
+            for i in {1..30}; do
+              sleep 10  # Check every 10 seconds instead of 15
+              CURRENT_STATS=$(ccache -s)
+              echo "⏱️  [${i}0s] ccache monitor checkpoint:"
+              echo "$CURRENT_STATS" | grep -E "(hits|misses|hit rate)" || echo "$CURRENT_STATS" | head -3
+
+              # Check if any calls have been made to ccache at all
+              TOTAL_CALLS=$(echo "$CURRENT_STATS" | grep -o "cache hit.*[0-9]" | grep -o "[0-9]\+" | head -1 || echo "0")
+              TOTAL_MISSES=$(echo "$CURRENT_STATS" | grep -o "cache miss.*[0-9]" | grep -o "[0-9]\+" | head -1 || echo "0")
+              TOTAL=$(($TOTAL_CALLS + $TOTAL_MISSES))
+
+              if [ "$TOTAL" -gt 0 ]; then
+                echo "✅ ccache IS being invoked! (Total calls: $TOTAL)"
+              else
+                echo "❌ ccache NOT invoked yet (0 total calls)"
+              fi
+              echo "📊 ---"
+            done
+            echo "📊 Monitor finished at $(date)"
+          ) &
+          MONITOR_PID=$!
+          echo "🔍 Background monitor started with PID: $MONITOR_PID"
+
+          # Run the build with some output to see actual compiler commands
+          echo "🚀 Running build and capturing compiler commands..."
+
+          # First ensure we have a clean build
+          echo "🧹 Removing any existing build artifacts to force compilation..."
+          rm -rf _build/debug
+
+          # Now run the full build process
+          make debug 2>&1 | tee /tmp/build.log &
+          BUILD_PID=$!
+
+          # Wait for build to complete
+          wait $BUILD_PID
+          BUILD_EXIT_CODE=$?
+
+          # Stop monitoring
+          kill $MONITOR_PID 2>/dev/null || true
+          wait $MONITOR_PID 2>/dev/null || true
+
+          echo ""
+          echo "🔍 SMOKING GUN ANALYSIS: Was ccache actually used?"
+          echo "=================================================="
+
+          # Check if ccache appears in any compiler commands
+          echo "Searching for ccache in compiler commands..."
+          if grep -q "ccache" /tmp/build.log; then
+            echo "✅ FOUND ccache in build commands!"
+            echo "Sample ccache commands:"
+            grep "ccache" /tmp/build.log | head -5
+          else
+            echo "❌ SMOKING GUN: ccache NOT found in any compiler commands!"
+            echo "This proves ccache is NOT being used by the build system."
+            echo ""
+            echo "Sample compiler commands (should have ccache prefix):"
+            grep -E "(g\+\+|gcc)" /tmp/build.log | head -5 || echo "No compiler commands in log"
+          fi
+
+          echo ""
+          echo "🔧 FINAL DIAGNOSIS:"
+          if grep -q "ccache" /tmp/build.log; then
+            echo "✅ ccache IS being invoked but cache keys don't match between runs"
+            echo ""
+            echo "🔍 DEBUGGING CACHE KEY MISMATCHES:"
+            echo "Since ccache is working but 0% hit rate, something is making cache keys different."
+            echo ""
+            echo "🧪 Let's investigate what's invalidating the cache..."
+
+            # Check if debug log has useful info about cache misses
+            if [ -f "/tmp/ccache-debug.log" ]; then
+              echo "📋 Sample cache miss reasons from debug log:"
+              grep -E "(cache miss|miss reason|no cached result)" /tmp/ccache-debug.log | head -5 || echo "No clear miss reasons found"
+
+              echo ""
+              echo "📋 Sample cache key factors:"
+              grep -E "(hash|input|mtime|cwd)" /tmp/ccache-debug.log | head -10 || echo "No hash info found"
+            fi
+
+            echo ""
+            echo "🎯 NEXT DEBUGGING STEPS NEEDED:"
+            echo "1. Check if working directory is consistent between runs"
+            echo "2. Check if compiler absolute paths are consistent"
+            echo "3. Check if environment variables affecting compilation"
+            echo "4. Verify file timestamps aren't changing unnecessarily"
+
+          else
+            echo "ccache is NOT being invoked - CMAKE_*_COMPILER_LAUNCHER not working"
+            echo "Need to investigate why CMake isn't using the compiler launchers"
+          fi
+
+          if [ $BUILD_EXIT_CODE -eq 0 ]; then
+            echo "✅ Build completed successfully!"
+          else
+            echo "❌ Build failed with exit code: $BUILD_EXIT_CODE"
+          fi
 
       # Display ccache statistics after build
-      - name: CCache Statistics After Build
+      - name: CCache Statistics After Build & Root Cause Analysis
         if: always()  # Run even if build failed
         run: |
-          echo "CCache statistics after build:"
+          echo "🎯 FINAL CCACHE ANALYSIS:"
+          echo "========================"
+
           ccache -vs
+
+          echo ""
+          echo "🔍 ROOT CAUSE ANALYSIS:"
+          echo "----------------------"
+
+          # Check if ccache was actually used
+          CACHE_HITS=$(ccache -s | grep "cache hit" | grep -o '[0-9]*' | head -1 || echo "0")
+          CACHE_MISSES=$(ccache -s | grep "cache miss" | grep -o '[0-9]*' | head -1 || echo "0")
+          TOTAL_CALLS=$((CACHE_HITS + CACHE_MISSES))
+
+          echo "📊 Cache usage summary:"
+          echo "  Hits: $CACHE_HITS"
+          echo "  Misses: $CACHE_MISSES"
+          echo "  Total compiler calls: $TOTAL_CALLS"
+
+          if [ "$TOTAL_CALLS" -eq 0 ]; then
+            echo ""
+            echo "❌ SMOKING GUN: ccache was NEVER invoked!"
+            echo "   This means our build system is not using ccache at all."
+            echo "   The compiler launchers are not set up correctly."
+            echo ""
+            echo "🔧 NEXT STEPS:"
+            echo "   1. Check if VERAX_ENABLE_CCACHE=ON is actually being passed to CMake"
+            echo "   2. Verify cmake configuration shows ccache setup messages"
+            echo "   3. Check if cmake is finding ccache executable"
+            echo "   4. Ensure CMAKE_C_COMPILER_LAUNCHER and CMAKE_CXX_COMPILER_LAUNCHER get set"
+
+          elif [ "$CACHE_HITS" -eq 0 ]; then
+            echo ""
+            echo "🟡 DIAGNOSIS: ccache IS being used, but NO hits"
+            echo "   This means cache keys are changing between runs."
+            echo "   Common causes: timestamps, absolute paths, compiler changes"
+            echo ""
+            echo "🔍 CACHE MISS DEBUGGING:"
+            echo "   Debug log analysis (last 50 lines):"
+            tail -50 /tmp/ccache-debug.log 2>/dev/null | grep -E "(cache miss|miss reason|hash|manifest)" | head -20 || echo "No debug log available"
+            echo ""
+            echo "🔧 NEXT STEPS:"
+            echo "   1. Applied CCACHE_SLOPPINESS (including random_seed, file_macro)"
+            echo "   2. Applied CCACHE_COMPILERCHECK=content"
+            echo "   3. Applied CCACHE_BASEDIR to normalize paths"
+            echo "   4. If still 0% hit rate, likely need to investigate working directory or absolute path differences"
+
+          else
+            echo ""
+            echo "✅ SUCCESS: ccache is working! ($CACHE_HITS hits out of $TOTAL_CALLS calls)"
+          fi
 
       # Save ccache for future runs
       - name: Save ccache
         uses: apache/infrastructure-actions/stash/save@3354c1565d4b0e335b78a76aedd82153a9e144d4
         with:
-          path: ${{ env.CCACHE_DIR }}
+          path: /__w/verax/verax/ccache
           key: ccache-ubuntu-debug-default-gcc
 
       # Run Verax tests (excluding velox tests)
@@ -112,4 +388,10 @@ jobs:
           # TODO: Fix failing tests and remove them from the GTEST_FILTER exclusion list - tracked in issue #204 (https://github.com/facebookexperimental/verax/issues/204)
           GTEST_FILTER: "-TpchPlanTest.q01:TpchPlanTest.q03:TpchPlanTest.q05:HiveQueriesTest.basic:PlanTest.filterImport:PlanTest.intersect:PlanTest.except"
         run: |
+          echo "🧪 Running tests from debug build directory..."
+          echo "📁 Current directory: $(pwd)"
+          echo "📂 Directory contents:"
+          ls -la || echo "Directory listing failed"
+
+          echo "🏃 Running tests..."
           ctest -j 8 --output-on-failure --no-tests=error
