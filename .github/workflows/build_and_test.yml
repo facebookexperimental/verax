@@ -77,6 +77,19 @@ jobs:
           git config --global --add safe.directory "/__w/verax/verax"
           git config --global --add safe.directory "*"
 
+      # Cache velox submodule
+      - name: Get velox submodule commit hash
+        id: velox-hash
+        run: echo "hash=$(git -C velox rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Cache velox submodule
+        uses: actions/cache@v4
+        with:
+          path: velox
+          key: ${{ runner.os }}-velox-${{ steps.velox-hash.outputs.hash }}
+          restore-keys: |
+            ${{ runner.os }}-velox-
+
       - name: Clear CCache Statistics
         run: |
           ccache -sz
