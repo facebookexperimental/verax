@@ -214,6 +214,206 @@ TEST_F(PlanTest, rejectedFilters) {
   ASSERT_TRUE(matcher->match(plan));
 }
 
+TEST_F(PlanTest, specialFormConstantFold) {
+  testConnector_->createTable(
+      "numbers", ROW({"a", "b", "c"}, {BIGINT(), DOUBLE(), VARCHAR()}));
+
+  {
+    auto logicalPlan = lp::PlanBuilder()
+                           .tableScan(kTestConnectorId, "numbers")
+                           .filter("1 in (1, 2, 3)")
+                           .map({"a + 2"})
+                           .build();
+    auto matcher = core::PlanMatcherBuilder().tableScan().project().build();
+
+    auto plan = toSingleNodePlan(logicalPlan);
+    ASSERT_TRUE(matcher->match(plan));
+  }
+  {
+    auto logicalPlan = lp::PlanBuilder()
+                           .tableScan(kTestConnectorId, "numbers")
+                           .filter("1 in (2, 3)")
+                           .map({"a + 2"})
+                           .build();
+    auto matcher = core::PlanMatcherBuilder()
+                       .tableScan()
+                       .filter("false")
+                       .project()
+                       .build();
+
+    auto plan = toSingleNodePlan(logicalPlan);
+    ASSERT_TRUE(matcher->match(plan));
+  }
+  {
+    auto logicalPlan = lp::PlanBuilder()
+                           .tableScan(kTestConnectorId, "numbers")
+                           .filter("if(2>1, true, false)")
+                           .map({"a + 2"})
+                           .build();
+    auto matcher = core::PlanMatcherBuilder().tableScan().project().build();
+
+    auto plan = toSingleNodePlan(logicalPlan);
+    ASSERT_TRUE(matcher->match(plan));
+  }
+  {
+    auto logicalPlan = lp::PlanBuilder()
+                           .tableScan(kTestConnectorId, "numbers")
+                           .filter("if(2<1, true, false)")
+                           .map({"a + 2"})
+                           .build();
+    auto matcher = core::PlanMatcherBuilder()
+                       .tableScan()
+                       .filter("false")
+                       .project()
+                       .build();
+
+    auto plan = toSingleNodePlan(logicalPlan);
+    ASSERT_TRUE(matcher->match(plan));
+  }
+  {
+    auto logicalPlan = lp::PlanBuilder()
+                           .tableScan(kTestConnectorId, "numbers")
+                           .filter("1>2 or false")
+                           .map({"a + 2"})
+                           .build();
+    auto matcher = core::PlanMatcherBuilder()
+                       .tableScan()
+                       .filter("false")
+                       .project()
+                       .build();
+
+    auto plan = toSingleNodePlan(logicalPlan);
+    ASSERT_TRUE(matcher->match(plan));
+  }
+  {
+    auto logicalPlan = lp::PlanBuilder()
+                           .tableScan(kTestConnectorId, "numbers")
+                           .filter("true or 2<1")
+                           .map({"a + 2"})
+                           .build();
+    auto matcher = core::PlanMatcherBuilder().tableScan().project().build();
+
+    auto plan = toSingleNodePlan(logicalPlan);
+    ASSERT_TRUE(matcher->match(plan));
+  }
+  {
+    auto logicalPlan = lp::PlanBuilder()
+                           .tableScan(kTestConnectorId, "numbers")
+                           .filter("cast(0 as BOOLEAN)")
+                           .map({"a + 2"})
+                           .build();
+    auto matcher = core::PlanMatcherBuilder()
+                       .tableScan()
+                       .filter("false")
+                       .project()
+                       .build();
+
+    auto plan = toSingleNodePlan(logicalPlan);
+    ASSERT_TRUE(matcher->match(plan));
+  }
+  {
+    auto logicalPlan = lp::PlanBuilder()
+                           .tableScan(kTestConnectorId, "numbers")
+                           .filter("cast(1 as BOOLEAN)")
+                           .map({"a + 2"})
+                           .build();
+    auto matcher = core::PlanMatcherBuilder().tableScan().project().build();
+
+    auto plan = toSingleNodePlan(logicalPlan);
+    ASSERT_TRUE(matcher->match(plan));
+  }
+  {
+    auto logicalPlan = lp::PlanBuilder()
+                           .tableScan(kTestConnectorId, "numbers")
+                           .filter("try_cast('a' as BIGINT) > 4")
+                           .map({"a + 2"})
+                           .build();
+    auto matcher =
+        core::PlanMatcherBuilder().tableScan().filter("null").project().build();
+
+    auto plan = toSingleNodePlan(logicalPlan);
+    ASSERT_TRUE(matcher->match(plan));
+  }
+  {
+    auto logicalPlan = lp::PlanBuilder()
+                           .tableScan(kTestConnectorId, "numbers")
+                           .filter("try_cast(1 as BIGINT) > 4")
+                           .map({"a + 2"})
+                           .build();
+    auto matcher = core::PlanMatcherBuilder()
+                       .tableScan()
+                       .filter("false")
+                       .project()
+                       .build();
+
+    auto plan = toSingleNodePlan(logicalPlan);
+    ASSERT_TRUE(matcher->match(plan));
+  }
+  {
+    auto logicalPlan = lp::PlanBuilder()
+                           .tableScan(kTestConnectorId, "numbers")
+                           .filter("try_cast(1 as BOOLEAN)")
+                           .map({"a + 2"})
+                           .build();
+    auto matcher = core::PlanMatcherBuilder().tableScan().project().build();
+
+    auto plan = toSingleNodePlan(logicalPlan);
+    ASSERT_TRUE(matcher->match(plan));
+  }
+  {
+    auto logicalPlan = lp::PlanBuilder()
+                           .tableScan(kTestConnectorId, "numbers")
+                           .filter("coalesce(cast(null as boolean), false)")
+                           .map({"a + 2"})
+                           .build();
+    auto matcher = core::PlanMatcherBuilder()
+                       .tableScan()
+                       .filter("false")
+                       .project()
+                       .build();
+
+    auto plan = toSingleNodePlan(logicalPlan);
+    ASSERT_TRUE(matcher->match(plan));
+  }
+  {
+    auto logicalPlan = lp::PlanBuilder()
+                           .tableScan(kTestConnectorId, "numbers")
+                           .filter("coalesce(cast(null as boolean), true)")
+                           .map({"a + 2"})
+                           .build();
+    auto matcher = core::PlanMatcherBuilder().tableScan().project().build();
+
+    auto plan = toSingleNodePlan(logicalPlan);
+    ASSERT_TRUE(matcher->match(plan));
+  }
+  {
+    auto logicalPlan = lp::PlanBuilder()
+                           .tableScan(kTestConnectorId, "numbers")
+                           .filter("case when 1>2 then true else false end")
+                           .map({"a + 2"})
+                           .build();
+    auto matcher = core::PlanMatcherBuilder()
+                       .tableScan()
+                       .filter("false")
+                       .project()
+                       .build();
+
+    auto plan = toSingleNodePlan(logicalPlan);
+    ASSERT_TRUE(matcher->match(plan));
+  }
+  {
+    auto logicalPlan = lp::PlanBuilder()
+                           .tableScan(kTestConnectorId, "numbers")
+                           .filter("case when 2>1 then true else false end")
+                           .map({"a + 2"})
+                           .build();
+    auto matcher = core::PlanMatcherBuilder().tableScan().project().build();
+
+    auto plan = toSingleNodePlan(logicalPlan);
+    ASSERT_TRUE(matcher->match(plan));
+  }
+}
+
 TEST_F(PlanTest, inList) {
   testConnector_->createTable(
       "numbers", ROW({"a", "b", "c"}, {BIGINT(), DOUBLE(), VARCHAR()}));
@@ -228,7 +428,7 @@ TEST_F(PlanTest, inList) {
   {
     auto logicalPlan = scan().filter("1 in (1, 2, 3)").map({"a + 2"}).build();
 
-    auto matcher = scanMatcher().filter("true").project().build();
+    auto matcher = scanMatcher().project().build();
 
     auto plan = toSingleNodePlan(logicalPlan);
     ASSERT_TRUE(matcher->match(plan));

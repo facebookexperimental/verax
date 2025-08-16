@@ -411,6 +411,11 @@ core::TypedExprPtr ToVelox::toTypedExpr(ExprCP expr) {
             toTypePtr(expr->value().type), std::move(inputs), false);
       }
 
+      if (call->name() == toName("trycast")) {
+        return std::make_shared<core::CastTypedExpr>(
+            toTypePtr(expr->value().type), std::move(inputs), true);
+      }
+
       return std::make_shared<core::CallTypedExpr>(
           toTypePtr(expr->value().type), std::move(inputs), call->name());
     }

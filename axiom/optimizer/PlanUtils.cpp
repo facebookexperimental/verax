@@ -103,4 +103,13 @@ std::string conjunctsToString(const ExprVector& conjuncts) {
   return out.str();
 }
 
+bool isConstantTrue(ExprCP expr) {
+  if (expr->type() != PlanType::kLiteralExpr) {
+    return false;
+  }
+  const auto& variant = expr->as<Literal>()->literal();
+  return variant.kind() == TypeKind::BOOLEAN && !variant.isNull() &&
+      variant.value<bool>();
+}
+
 } // namespace facebook::velox::optimizer

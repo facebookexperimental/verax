@@ -108,4 +108,6 @@ std::optional<int64_t> maybeIntegerLiteral(
 
 std::string conjunctsToString(const ExprVector& conjuncts);
 
+bool isConstantTrue(ExprCP expr);
+
 } // namespace facebook::velox::optimizer

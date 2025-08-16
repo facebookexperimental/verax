@@ -106,19 +106,63 @@ void ToGraph::translateConjuncts(const lp::ExprPtr& input, ExprVector& flat) {
       translateConjuncts(child, flat);
     }
   } else {
-    flat.push_back(translateExpr(input));
+    auto translatedExpr = translateExpr(input);
+    if (!isConstantTrue(translatedExpr)) {
+      flat.push_back(translateExpr(input));
+    }
   }
 }
 
+namespace {
+const char* specialFormCallName(const lp::SpecialFormExpr* form) {
+  switch (form->form()) {
+    case lp::SpecialForm::kAnd:
+      return "and";
+    case lp::SpecialForm::kOr:
+      return "or";
+    case lp::SpecialForm::kCast:
+      return "cast";
+    case lp::SpecialForm::kTryCast:
+      return "trycast";
+    case lp::SpecialForm::kCoalesce:
+      return "coalesce";
+    case lp::SpecialForm::kIf:
+      return "if";
+    case lp::SpecialForm::kSwitch:
+      return "switch";
+    case lp::SpecialForm::kIn:
+      return "in";
+    default:
+      VELOX_UNREACHABLE(lp::SpecialFormName::toName(form->form()));
+  }
+}
+
+// Returns bits describing function 'name'.
+FunctionSet functionBits(Name name) {
+  if (auto* md = functionMetadata(name)) {
+    return md->functionSet;
+  }
+
+  const auto deterministic = velox::isDeterministic(name);
+  if (deterministic.has_value() && !deterministic.value()) {
+    return FunctionSet(FunctionSet::kNonDeterministic);
+  }
+
+  return FunctionSet(0);
+}
+
+} // namespace
+
 ExprCP ToGraph::tryFoldConstant(
     const lp::CallExpr* call,
-    const lp::SpecialFormExpr* cast,
+    const lp::SpecialFormExpr* specialForm,
     const ExprVector& literals) {
   try {
-    Value value(call ? toType(call->type()) : toType(cast->type()), 1);
+    Value value(call ? toType(call->type()) : toType(specialForm->type()), 1);
     auto* veraxExpr = make<Call>(
         PlanType::kCallExpr,
-        cast ? toName("cast") : toName(call->name()),
+        specialForm ? toName(specialFormCallName(specialForm))
+                    : toName(call->name()),
         value,
         literals,
         FunctionSet());
@@ -599,46 +643,6 @@ ExprCP ToGraph::makeConstant(const lp::ConstantExpr& constant) {
   return literal;
 }
 
-namespace {
-const char* specialFormCallName(const lp::SpecialFormExpr* form) {
-  switch (form->form()) {
-    case lp::SpecialForm::kAnd:
-      return "and";
-    case lp::SpecialForm::kOr:
-      return "or";
-    case lp::SpecialForm::kCast:
-      return "cast";
-    case lp::SpecialForm::kTryCast:
-      return "trycast";
-    case lp::SpecialForm::kCoalesce:
-      return "coalesce";
-    case lp::SpecialForm::kIf:
-      return "if";
-    case lp::SpecialForm::kSwitch:
-      return "switch";
-    case lp::SpecialForm::kIn:
-      return "in";
-    default:
-      VELOX_UNREACHABLE(lp::SpecialFormName::toName(form->form()));
-  }
-}
-
-// Returns bits describing function 'name'.
-FunctionSet functionBits(Name name) {
-  if (auto* md = functionMetadata(name)) {
-    return md->functionSet;
-  }
-
-  const auto deterministic = velox::isDeterministic(name);
-  if (deterministic.has_value() && !deterministic.value()) {
-    return FunctionSet(FunctionSet::kNonDeterministic);
-  }
-
-  return FunctionSet(0);
-}
-
-} // namespace
-
 ExprCP ToGraph::translateExpr(const lp::ExprPtr& expr) {
   if (expr->isInputReference()) {
     return translateColumn(expr->asUnchecked<lp::InputReferenceExpr>()->name());
@@ -667,10 +671,10 @@ ExprCP ToGraph::translateExpr(const lp::ExprPtr& expr) {
       }
     }
   }
-  auto isCast = isSpecialForm(expr.get(), lp::SpecialForm::kCast);
-  const lp::SpecialFormExpr* cast =
-      isCast ? expr->asUnchecked<lp::SpecialFormExpr>() : nullptr;
-  if (!isCast && !call) {
+  const lp::SpecialFormExpr* specialForm = expr->isSpecialForm()
+      ? expr->asUnchecked<lp::SpecialFormExpr>()
+      : nullptr;
+  if (!specialForm && !call) {
     if (expr->isLambda()) {
       return translateLambda(expr->asUnchecked<lp::LambdaExpr>());
     }
@@ -691,8 +695,8 @@ ExprCP ToGraph::translateExpr(const lp::ExprPtr& expr) {
     }
   }
 
-  if (allConstant && (call || cast)) {
-    auto literal = tryFoldConstant(call, cast, args);
+  if (allConstant && (call || specialForm)) {
+    auto literal = tryFoldConstant(call, specialForm, args);
     if (literal) {
       return literal;
     }
@@ -704,14 +708,6 @@ ExprCP ToGraph::translateExpr(const lp::ExprPtr& expr) {
     funcs = funcs | functionBits(name);
     auto* callExpr = deduppedCall(
         name, Value(toType(expr->type()), cardinality), std::move(args), funcs);
-    return callExpr;
-  }
-  if (cast) {
-    auto name = toName("cast");
-    funcs = funcs | functionBits(name);
-
-    auto* callExpr = deduppedCall(
-        name, Value(toType(cast->type()), cardinality), std::move(args), funcs);
     return callExpr;
   }
 
