@@ -339,9 +339,14 @@ Join::Join(
   cost_.inputCardinality = inputCardinality();
   cost_.fanout = fanout;
 
+  bool isCrossJoin = _leftKeys.empty() && rightKeys.empty();
+  if (isCrossJoin) {
+    return;
+  }
+
   float buildSize = right->cost().inputCardinality;
   auto rowCost =
-      right->input()->columns().size() * Costs::kHashExtractColumnCost;
+      right->columns().size() * Costs::kHashExtractColumnCost;
   cost_.unitCost = Costs::hashProbeCost(buildSize) + cost_.fanout * rowCost +
       leftKeys.size() * Costs::kHashColumnCost;
 }
@@ -413,8 +418,21 @@ std::string Join::toString(bool recursive, bool detail) const {
   if (recursive) {
     out << input()->toString(true, detail);
   }
-  out << "*" << (method == JoinMethod::kHash ? "H" : "M") << " "
-      << joinTypeLabel(joinType);
+  out << "*";
+  
+  switch (method) {
+    case JoinMethod::kHash:
+      out << "H";
+      break;
+    case JoinMethod::kMerge:
+      out << "M";
+      break;
+    case JoinMethod::kCross:
+      out << "C";
+      break;
+  }
+  
+  out << " " << joinTypeLabel(joinType);
   printCost(detail, out);
   if (detail) {
     out << "columns: " << itemsToString(columns().data(), columns().size())

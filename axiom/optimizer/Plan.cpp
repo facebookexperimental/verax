@@ -1417,7 +1417,48 @@ void Optimization::crossJoin(
     const JoinCandidate& candidate,
     PlanState& state,
     std::vector<NextJoin>& toTry) {
-  VELOX_NYI("No cross joins");
+  PlanStateSaver save(state, candidate);
+
+  PlanObjectSet broadcastTables;
+  PlanObjectSet broadcastColumns;
+  for (auto buildTable : candidate.tables) {
+    broadcastColumns.unionSet(availableColumns(buildTable));
+    broadcastTables.add(buildTable);
+  }
+  state.columns.unionSet(broadcastColumns);
+
+  auto memoKey = MemoKey{
+      candidate.tables[0], broadcastColumns, broadcastTables, candidate.existences};
+  
+  auto broadcast = Distribution::broadcast(plan->distribution().distributionType);
+  PlanObjectSet empty;
+  bool needsShuffle = false;
+  auto* rightPlan = makePlan(memoKey, broadcast, empty, candidate.existsFanout, state, needsShuffle);
+
+  RelationOpPtr rightOp = rightPlan->op;
+  PlanState broadcastState(state.optimization, state.dt, rightPlan);
+  if (needsShuffle && !isSingleWorker()) {
+    rightOp = make<Repartition>(rightPlan->op, broadcast, rightOp->columns());
+  }
+  broadcastState.addCost(*rightOp);
+
+  auto resultColumns = plan->columns();
+  resultColumns.insert(
+      resultColumns.end(),
+      rightOp->columns().begin(),
+      rightOp->columns().end());
+
+  auto* join = Join::makeCrossJoin(
+    plan, 
+    std::move(rightOp), 
+    std::move(resultColumns));
+
+  state.addCost(*join);
+  state.cost.totalBytes *= broadcastState.cost.totalBytes;
+  state.cost.transferBytes += broadcastState.cost.transferBytes;
+  state.placed.unionSet(broadcastTables);
+
+  state.addNextJoin(&candidate, join, {}, toTry);
 }
 
 void Optimization::addJoin(
@@ -1425,12 +1466,12 @@ void Optimization::addJoin(
     const RelationOpPtr& plan,
     PlanState& state,
     std::vector<NextJoin>& result) {
-  std::vector<NextJoin> toTry;
   if (!candidate.join) {
-    crossJoin(plan, candidate, state, toTry);
+    crossJoin(plan, candidate, state, result);
     return;
   }
 
+  std::vector<NextJoin> toTry;
   joinByIndex(plan, candidate, state, toTry);
 
   const auto sizeAfterIndex = toTry.size();
@@ -1510,7 +1551,7 @@ RelationOpPtr Optimization::placeSingleRowDt(
   auto rightPlan = makePlan(memoKey, broadcast, empty, 1, state, needsShuffle);
 
   auto rightOp = rightPlan->op;
-  if (needsShuffle) {
+  if (needsShuffle && !isSingleWorker()) {
     rightOp = make<Repartition>(rightOp, broadcast, rightOp->columns());
   }
 
