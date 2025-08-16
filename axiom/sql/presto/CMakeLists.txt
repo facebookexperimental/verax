@@ -25,6 +25,9 @@ add_library(
     PrestoSqlListener.cpp
     PrestoSqlParser.cpp
     PrestoSqlVisitor.cpp
+    AstNodesImpl.cpp
+    AstBuilder.cpp
+    PrestoSqlAstParser.cpp
 )
 
 target_link_libraries(velox_presto_grammar_lib antlr4_shared)
