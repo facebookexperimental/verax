@@ -162,6 +162,12 @@ const PlanObjectSet& PlanState::downstreamColumns() const {
     }
   }
 
+  for (const auto* unnest : dt->unnests) {
+    if (!placed.contains(unnest)) {
+      result.unionColumns(unnest->unnestExprs());
+    }
+  }
+
   if (dt->aggregation && !placed.contains(dt->aggregation)) {
     auto aggToPlace = dt->aggregation;
     const auto numGroupingKeys = aggToPlace->groupingKeys().size();

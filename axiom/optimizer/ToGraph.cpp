@@ -848,6 +848,40 @@ ExprVector ToGraph::translateColumns(const std::vector<lp::ExprPtr>& source) {
   return result;
 }
 
+void ToGraph::translateUnnest(const lp::UnnestNode& logicalUnnest) {
+  const auto& replicateType = *logicalUnnest.onlyInput()->outputType();
+  ExprVector unnestExprs;
+  ColumnVector unnestedColumns;
+  for (auto channel : usedChannels(logicalUnnest)) {
+    if (channel < replicateType.size()) {
+      continue;
+    }
+    channel -= replicateType.size();
+    for (size_t i = 0; const auto& name : logicalUnnest.unnestedNames()) {
+      if (channel >= name.size()) {
+        channel -= name.size();
+        ++i;
+        continue;
+      }
+      auto expr = logicalUnnest.unnestExpressions()[i];
+      const auto& inputName =
+          expr->asUnchecked<lp::InputReferenceExpr>()->name();
+      const auto& outputName = name[channel];
+      // TODO: Cardinality here should be multiply input column cardinality by
+      // the expected number of elements in unnested element.
+      Value value{
+          toType(replicateType.findChild(inputName)->childAt(channel)), 1};
+      const auto* columnName = toName(outputName);
+      renames_[outputName] = unnestedColumns.emplace_back(
+          make<Column>(columnName, currentDt_, value, columnName));
+      unnestExprs.emplace_back(translateExpr(expr));
+      break;
+    }
+  }
+  currentDt_->unnests.emplace_back(
+      make<UnnestPlan>(std::move(unnestExprs), std::move(unnestedColumns)));
+}
+
 AggregationPlanCP ToGraph::translateAggregation(
     const lp::AggregateNode& logicalAgg) {
   ExprVector groupingKeys = translateColumns(logicalAgg.groupingKeys());
@@ -1570,6 +1604,7 @@ PlanObjectP ToGraph::makeQueryGraph(
         return wrapInDt(node);
       }
 
+      // TODO: we don't restrict to "single" here.
       // A single groupBy is allowed before a limit. If arrives after orderBy,
       // then orderBy is dropped. If arrives after limit, then starts a new DT.
 
@@ -1628,7 +1663,25 @@ PlanObjectP ToGraph::makeQueryGraph(
       currentDt_->tableSet.add(setDt);
       return currentDt_;
     }
-    case lp::NodeKind::kUnnest:
+
+    case lp::NodeKind::kUnnest: {
+      if (!contains(allowedInDt, PlanType::kUnnestNode)) {
+        return wrapInDt(node);
+      }
+
+      // Multiple unnest is allowed in a DT.
+      // If arrives after groupBy, orderBy, limit, then starts a new DT.
+      makeQueryGraph(*node.onlyInput(), allowedInDt);
+
+      if (currentDt_->hasAggregation() || currentDt_->hasOrderBy() ||
+          currentDt_->hasLimit()) {
+        finalizeDt(*node.onlyInput());
+      }
+
+      translateUnnest(*node.asUnchecked<lp::UnnestNode>());
+      return currentDt_;
+    }
+
     default:
       VELOX_NYI(
           "Unsupported PlanNode {}", lp::NodeKindName::toName(node.kind()));
