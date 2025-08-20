@@ -77,6 +77,18 @@ jobs:
           git config --global --add safe.directory "/__w/verax/verax"
           git config --global --add safe.directory "*"
 
+      # Install ANTLR4 runtime if not available
+      - name: Install ANTLR4 Runtime
+        run: |
+          # Check if antlr4-runtime is available
+          if ! pkg-config --exists antlr4-runtime; then
+            echo "Installing ANTLR4 runtime..."
+            dnf install -y antlr4-cpp-dev || true
+            # If dnf fails, we'll let the build system download it
+          else
+            echo "ANTLR4 runtime already available"
+          fi
+
       - name: Clear CCache Statistics
         run: |
           ccache -sz

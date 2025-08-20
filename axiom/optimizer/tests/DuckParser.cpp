@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "axiom/optimizer/tests/QuerySqlParser.h"
+#include "axiom/optimizer/tests/DuckParser.h"
 #include "axiom/logical_plan/ExprPrinter.h"
 #include "velox/duckdb/conversion/DuckConversion.h"
 #include "velox/parse/DuckLogicalOperator.h"
@@ -752,7 +752,7 @@ static void customAggregateFinalize(
 
 } // namespace
 
-void QuerySqlParser::registerTable(
+void DuckParser::registerTable(
     const std::string& name,
     const RowTypePtr& type) {
   VELOX_CHECK_EQ(
@@ -762,7 +762,7 @@ void QuerySqlParser::registerTable(
   auto res = conn_.Query(createTableSql);
 }
 
-void QuerySqlParser::registerScalarFunction(
+void DuckParser::registerScalarFunction(
     const std::string& name,
     const std::vector<TypePtr>& argTypes,
     const TypePtr& returnType) {
@@ -778,7 +778,7 @@ void QuerySqlParser::registerScalarFunction(
       customScalarFunction);
 }
 
-void QuerySqlParser::registerAggregateFunction(
+void DuckParser::registerAggregateFunction(
     const std::string& name,
     const std::vector<TypePtr>& argTypes,
     const TypePtr& returnType) {
@@ -798,7 +798,7 @@ void QuerySqlParser::registerAggregateFunction(
       customAggregateFinalize);
 }
 
-SqlStatementPtr QuerySqlParser::parse(const std::string& sql) {
+SqlStatementPtr DuckParser::parse(const std::string& sql) {
   // Disable the optimizer. Otherwise, the filter over table scan gets pushdown
   // as a callback that is impossible to recover.
   conn_.Query("PRAGMA disable_optimizer");

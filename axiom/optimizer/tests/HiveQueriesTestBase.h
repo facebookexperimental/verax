@@ -16,8 +16,8 @@
 
 #pragma once
 
+#include "axiom/optimizer/tests/DuckParser.h"
 #include "axiom/optimizer/tests/PlanMatcher.h"
-#include "axiom/optimizer/tests/QuerySqlParser.h"
 #include "axiom/optimizer/tests/QueryTestBase.h"
 
 namespace facebook::velox::optimizer::test {
@@ -26,10 +26,7 @@ class HiveQueriesTestBase : public test::QueryTestBase {
  protected:
   static void SetUpTestCase();
 
-  void SetUp() override {
-    test::QueryTestBase::SetUp();
-    parser_ = makeQueryParser();
-  }
+  void SetUp() override;
 
   static void TearDownTestCase() {
     LocalRunnerTestBase::TearDownTestCase();
@@ -55,10 +52,8 @@ class HiveQueriesTestBase : public test::QueryTestBase {
     return *parser_;
   }
 
- private:
-  std::unique_ptr<QuerySqlParser> makeQueryParser();
-
-  std::unique_ptr<QuerySqlParser> parser_;
+ protected:
+  std::unique_ptr<DuckParser> parser_;
 };
 
 } // namespace facebook::velox::optimizer::test

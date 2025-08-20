@@ -19,9 +19,9 @@
 #pragma once
 
 #include "antlr4-runtime.h"
-#include "axiom/sql/presto/PrestoSqlParser.h"
+#include "axiom/sql/presto/grammar/PrestoSqlParser.h"
 
-namespace facebook::velox::sql {
+namespace axiom::sql::presto {
 
 /**
  * This class defines an abstract visitor for a parse tree
@@ -701,4 +701,4 @@ class PrestoSqlVisitor : public antlr4::tree::AbstractParseTreeVisitor {
       PrestoSqlParser::NonReservedContext* context) = 0;
 };
 
-} // namespace facebook::velox::sql
+} // namespace axiom::sql::presto

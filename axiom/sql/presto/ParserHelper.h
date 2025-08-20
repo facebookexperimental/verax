@@ -16,22 +16,24 @@
 
 #pragma once
 
-#include "axiom/sql/presto/PrestoSqlLexer.h"
-#include "axiom/sql/presto/PrestoSqlParser.h"
+#include "axiom/sql/presto/ast/UpperCaseInputStream.h"
+#include "axiom/sql/presto/grammar/PrestoSqlLexer.h"
+#include "axiom/sql/presto/grammar/PrestoSqlParser.h"
 
-namespace facebook::velox::sql {
+namespace axiom::sql::presto {
 
+/// Creates Presto SQL parser.
 class ParserHelper {
  public:
-  explicit ParserHelper(const std::string& queryText);
+  explicit ParserHelper(const std::string& sql)
+      : inputStream_(std::make_unique<UpperCaseInputStream>(sql)),
+        lexer_(std::make_unique<PrestoSqlLexer>(inputStream_.get())),
+        tokenStream_(std::make_unique<antlr4::CommonTokenStream>(lexer_.get())),
+        parser_(std::make_unique<PrestoSqlParser>(tokenStream_.get())) {}
 
-  /// Simple API to test the ANTLR parser which calls the query() API. This
-  /// function must be called before synaxErrorCount().
-  void parse();
-
-  /// Returns the number of syntax errors found during parsing. This function
-  /// must be called after parse() is called.
-  size_t synaxErrorCount() const;
+  PrestoSqlParser& parser() const {
+    return *parser_;
+  }
 
  private:
   std::unique_ptr<antlr4::ANTLRInputStream> inputStream_;
@@ -39,4 +41,4 @@ class ParserHelper {
   std::unique_ptr<antlr4::CommonTokenStream> tokenStream_;
   std::unique_ptr<PrestoSqlParser> parser_;
 };
-} // namespace facebook::velox::sql
+} // namespace axiom::sql::presto

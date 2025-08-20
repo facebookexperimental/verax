@@ -18,6 +18,7 @@ add_subdirectory(tests)
 find_package(antlr4-runtime REQUIRED)
 
 add_library(
+    axiom_sql_presto_grammar
     velox_presto_grammar_lib
     PrestoSqlBaseListener.cpp
     PrestoSqlBaseVisitor.cpp
@@ -27,4 +28,4 @@ add_library(
     PrestoSqlVisitor.cpp
 )
 
-target_link_libraries(velox_presto_grammar_lib antlr4_shared)
+target_link_libraries(axiom_sql_presto_grammar antlr4_shared)

@@ -16,9 +16,6 @@
 #pragma once
 
 #include "axiom/logical_plan/LogicalPlanNode.h"
-#include "velox/vector/ComplexVector.h"
-
-#include <duckdb.hpp> // @manual
 
 namespace facebook::velox::optimizer::test {
 
@@ -81,40 +78,6 @@ class ExplainStatement : public SqlStatement {
 
  private:
   const SqlStatementPtr statement_;
-};
-
-class QuerySqlParser {
- public:
-  /// TODO Add support for queries that use tables from multiple connectors.
-  ///
-  /// @param connectorId The ID of the connector that can read all tables in the
-  /// query.
-  QuerySqlParser(const std::string& connectorId, memory::MemoryPool* pool)
-      : connectorId_{connectorId}, pool_{pool} {}
-
-  void registerTable(const std::string& name, const RowTypePtr& type);
-
-  void registerScalarFunction(
-      const std::string& name,
-      const std::vector<TypePtr>& argTypes,
-      const TypePtr& returnType);
-
-  // TODO Allow replacing built-in DuckDB functions. Currently, replacing "sum"
-  // causes a crash (a bug in DuckDB). Replacing existing functions is useful
-  // when signatures don't match.
-  void registerAggregateFunction(
-      const std::string& name,
-      const std::vector<TypePtr>& argTypes,
-      const TypePtr& returnType);
-
-  SqlStatementPtr parse(const std::string& sql);
-
- private:
-  const std::string connectorId_;
-  ::duckdb::DuckDB db_;
-  ::duckdb::Connection conn_{db_};
-  memory::MemoryPool* pool_;
-  std::unordered_map<std::string, std::vector<RowVectorPtr>> tables_;
 };
 
 } // namespace facebook::velox::optimizer::test

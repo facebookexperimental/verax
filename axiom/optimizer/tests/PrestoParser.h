@@ -13,9 +13,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 
-// Generated from PrestoSql.g4 by ANTLR 4.9.3
+#include "axiom/optimizer/tests/SqlStatement.h"
 
-#include "axiom/sql/presto/PrestoSqlVisitor.h"
+namespace facebook::velox::optimizer::test {
 
-using namespace facebook::velox::sql;
+class PrestoParser {
+ public:
+  PrestoParser(const std::string& defaultConnectorId, memory::MemoryPool* pool)
+      : defaultConnectorId_{defaultConnectorId}, pool_{pool} {}
+
+  SqlStatementPtr parse(const std::string& sql, bool enableTracing = false);
+
+ private:
+  const std::string defaultConnectorId_;
+
+  memory::MemoryPool* pool_;
+};
+
+} // namespace facebook::velox::optimizer::test

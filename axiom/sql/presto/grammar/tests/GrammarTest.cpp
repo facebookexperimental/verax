@@ -17,20 +17,22 @@
 #include <antlr4-runtime/antlr4-runtime.h>
 #include <gtest/gtest.h>
 
-#include "axiom/sql/presto/tests/ParserHelper.h"
+#include "axiom/sql/presto/ast/UpperCaseInputStream.h"
+#include "axiom/sql/presto/grammar/PrestoSqlLexer.h"
+#include "axiom/sql/presto/grammar/PrestoSqlParser.h"
 
-using namespace ::testing;
-
-namespace facebook::velox::sql {
-
+namespace axiom::sql::presto {
 namespace {
-void parseQuery(const std::string& sqlText) {
-  ParserHelper parser(sqlText);
-  parser.parse();
 
-  EXPECT_EQ(0, parser.synaxErrorCount()) << "Could not parse:" << sqlText;
+void parseQuery(const std::string& sql) {
+  UpperCaseInputStream input(sql);
+  PrestoSqlLexer lexer(&input);
+  antlr4::CommonTokenStream tokens(&lexer);
+  PrestoSqlParser parser(&tokens);
+  parser.query();
+
+  EXPECT_EQ(0, parser.getNumberOfSyntaxErrors()) << "Failed to parse:" << sql;
 }
-} // namespace
 
 TEST(GrammarTest, selectQueries) {
   static const std::vector<std::string> validQueries = {
@@ -88,4 +90,5 @@ TEST(GrammarTest, selectQueries) {
     parseQuery(q);
   }
 }
-} // namespace facebook::velox::sql
+} // namespace
+} // namespace axiom::sql::presto

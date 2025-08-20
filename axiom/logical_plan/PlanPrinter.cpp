@@ -134,13 +134,17 @@ class ToTextVisitor : public PlanNodeVisitor {
 
   void visit(const LimitNode& node, PlanNodeVisitorContext& context)
       const override {
-    appendNode(
-        "Limit",
-        node,
-        node.offset() > 0
-            ? fmt::format("{} (offset: {})", node.count(), node.offset())
-            : fmt::format("{}", node.count()),
-        context);
+    if (node.noLimit()) {
+      appendNode("Offset", node, fmt::to_string(node.offset()), context);
+    } else {
+      appendNode(
+          "Limit",
+          node,
+          node.offset() > 0
+              ? fmt::format("{} (offset: {})", node.count(), node.offset())
+              : fmt::format("{}", node.count()),
+          context);
+    }
   }
 
   void visit(const SetNode& node, PlanNodeVisitorContext& context)

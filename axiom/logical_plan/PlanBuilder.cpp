@@ -241,21 +241,27 @@ void PlanBuilder::resolveProjections(
   for (const auto& untypedExpr : projections) {
     auto expr = resolveScalarTypes(untypedExpr.expr());
 
-    if (!untypedExpr.name().empty()) {
-      const auto& alias = untypedExpr.name();
-      outputNames.push_back(newName(alias));
-      mappings.add(alias, outputNames.back());
-    } else if (expr->isInputReference()) {
+    const auto& alias = untypedExpr.name();
+
+    if (expr->isInputReference()) {
       // Identity projection
       const auto& id = expr->asUnchecked<InputReferenceExpr>()->name();
-      outputNames.push_back(id);
+      if (!alias.has_value() || id == alias.value()) {
+        outputNames.push_back(id);
 
-      const auto names = outputMapping_->reverseLookup(id);
-      VELOX_USER_CHECK(!names.empty());
+        const auto names = outputMapping_->reverseLookup(id);
+        VELOX_USER_CHECK(!names.empty());
 
-      for (const auto& name : names) {
-        mappings.add(name, id);
+        for (const auto& name : names) {
+          mappings.add(name, id);
+        }
+      } else {
+        outputNames.push_back(newName(alias.value()));
+        mappings.add(alias.value(), outputNames.back());
       }
+    } else if (alias.has_value()) {
+      outputNames.push_back(newName(alias.value()));
+      mappings.add(alias.value(), outputNames.back());
     } else {
       outputNames.push_back(newName("expr"));
     }
@@ -325,6 +331,12 @@ PlanBuilder& PlanBuilder::with(const std::vector<ExprApi>& projections) {
 PlanBuilder& PlanBuilder::aggregate(
     const std::vector<std::string>& groupingKeys,
     const std::vector<std::string>& aggregates) {
+  return aggregate(parse(groupingKeys), parse(aggregates));
+}
+
+PlanBuilder& PlanBuilder::aggregate(
+    const std::vector<ExprApi>& groupingKeys,
+    const std::vector<ExprApi>& aggregates) {
   VELOX_USER_CHECK_NOT_NULL(node_, "Aggregate node cannot be a leaf node");
 
   std::vector<std::string> outputNames;
@@ -335,18 +347,16 @@ PlanBuilder& PlanBuilder::aggregate(
 
   auto newOutputMapping = std::make_shared<NameMappings>();
 
-  resolveProjections(
-      parse(groupingKeys), outputNames, keyExprs, *newOutputMapping);
+  resolveProjections(groupingKeys, outputNames, keyExprs, *newOutputMapping);
 
   std::vector<AggregateExprPtr> exprs;
   exprs.reserve(aggregates.size());
 
-  for (const auto& sql : aggregates) {
-    auto untypedExpr = parse::parseExpr(sql, parseOptions_);
-    auto expr = resolveAggregateTypes(untypedExpr);
+  for (const auto& aggregate : aggregates) {
+    auto expr = resolveAggregateTypes(aggregate.expr());
 
-    if (untypedExpr->alias().has_value()) {
-      const auto& alias = untypedExpr->alias().value();
+    if (aggregate.name().has_value()) {
+      const auto& alias = aggregate.name().value();
       outputNames.push_back(newName(alias));
       newOutputMapping->add(alias, outputNames.back());
     } else {
@@ -923,7 +933,8 @@ AggregateExprPtr ExprResolver::resolveAggregateTypes(
     const core::ExprPtr& expr,
     const InputNameResolver& inputNameResolver) const {
   const auto* call = dynamic_cast<const core::CallExpr*>(expr.get());
-  VELOX_USER_CHECK_NOT_NULL(call, "Aggregate must be a call expression");
+  VELOX_USER_CHECK_NOT_NULL(
+      call, "Aggregate must be a call expression: {}", expr->toString());
 
   const auto& name = call->name();
 
@@ -960,6 +971,18 @@ PlanBuilder& PlanBuilder::join(
     const PlanBuilder& right,
     const std::string& condition,
     JoinType joinType) {
+  std::optional<ExprApi> conditionExpr;
+  if (!condition.empty()) {
+    conditionExpr = parse::parseExpr(condition, parseOptions_);
+  }
+
+  return join(right, conditionExpr, joinType);
+}
+
+PlanBuilder& PlanBuilder::join(
+    const PlanBuilder& right,
+    const std::optional<ExprApi>& condition,
+    JoinType joinType) {
   VELOX_USER_CHECK_NOT_NULL(node_, "Join node cannot be a leaf node");
   VELOX_USER_CHECK_NOT_NULL(right.node_);
 
@@ -971,10 +994,9 @@ PlanBuilder& PlanBuilder::join(
   auto inputRowType = node_->outputType()->unionWith(right.node_->outputType());
 
   ExprPtr expr;
-  if (!condition.empty()) {
-    auto untypedExpr = parse::parseExpr(condition, parseOptions_);
+  if (condition.has_value()) {
     expr = resolver_.resolveScalarTypes(
-        untypedExpr, [&](const auto& alias, const auto& name) {
+        condition->expr(), [&](const auto& alias, const auto& name) {
           return resolveJoinInputName(
               alias, name, *outputMapping_, inputRowType);
         });
@@ -1056,6 +1078,24 @@ PlanBuilder& PlanBuilder::sort(const std::vector<std::string>& sortingKeys) {
   return *this;
 }
 
+PlanBuilder& PlanBuilder::sort(const std::vector<SortKey>& sortingKeys) {
+  VELOX_USER_CHECK_NOT_NULL(node_, "Sort node cannot be a leaf node");
+
+  std::vector<SortingField> sortingFields;
+  sortingFields.reserve(sortingKeys.size());
+
+  for (const auto& key : sortingKeys) {
+    auto expr = resolveScalarTypes(key.expr.expr());
+
+    sortingFields.push_back(
+        SortingField{expr, SortOrder(key.ascending, key.nullsFirst)});
+  }
+
+  node_ = std::make_shared<SortNode>(nextId(), node_, sortingFields);
+
+  return *this;
+}
+
 PlanBuilder& PlanBuilder::limit(int64_t offset, int64_t count) {
   VELOX_USER_CHECK_NOT_NULL(node_, "Limit node cannot be a leaf node");
 
@@ -1127,6 +1167,47 @@ PlanBuilder& PlanBuilder::as(const std::string& alias) {
 
 std::string PlanBuilder::newName(const std::string& hint) {
   return nameAllocator_->newName(hint);
+}
+
+size_t PlanBuilder::numOutput() const {
+  VELOX_CHECK_NOT_NULL(node_);
+  return node_->outputType()->size();
+}
+
+std::vector<std::string> PlanBuilder::findOrAssignOutputNames() const {
+  auto size = numOutput();
+
+  std::vector<std::string> names;
+  names.reserve(size);
+
+  for (auto i = 0; i < size; i++) {
+    names.push_back(findOrAssignOutputNameAt(i));
+  }
+
+  return names;
+}
+
+std::string PlanBuilder::findOrAssignOutputNameAt(size_t index) const {
+  const auto size = numOutput();
+  VELOX_CHECK_LT(index, size, "{}", node_->outputType()->toString());
+
+  auto id = node_->outputType()->nameOf(index);
+
+  auto names = outputMapping_->reverseLookup(id);
+  if (names.empty()) {
+    // Assign a name to the output column.
+    outputMapping_->add(id, id);
+    return id;
+  }
+
+  // Prefer non-aliased name.
+  for (const auto& name : names) {
+    if (!name.alias.has_value()) {
+      return name.name;
+    }
+  }
+
+  return names.front().name;
 }
 
 LogicalPlanNodePtr PlanBuilder::build() {

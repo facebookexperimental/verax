@@ -16,6 +16,6 @@
 
 // Generated from PrestoSql.g4 by ANTLR 4.9.3
 
-#include "axiom/sql/presto/PrestoSqlListener.h"
+#include "axiom/sql/presto/grammar/PrestoSqlBaseVisitor.h"
 
-using namespace facebook::velox::sql;
+using namespace axiom::sql::presto;

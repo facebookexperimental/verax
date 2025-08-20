@@ -19,9 +19,9 @@
 #pragma once
 
 #include "antlr4-runtime.h"
-#include "axiom/sql/presto/PrestoSqlListener.h"
+#include "axiom/sql/presto/grammar/PrestoSqlListener.h"
 
-namespace facebook::velox::sql {
+namespace axiom::sql::presto {
 
 /**
  * This class provides an empty implementation of PrestoSqlListener,
@@ -1118,4 +1118,4 @@ class PrestoSqlBaseListener : public PrestoSqlListener {
   virtual void visitErrorNode(antlr4::tree::ErrorNode* /*node*/) override {}
 };
 
-} // namespace facebook::velox::sql
+} // namespace axiom::sql::presto

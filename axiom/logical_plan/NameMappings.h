@@ -76,6 +76,7 @@ class NameMappings {
   ///
   /// Used to produce final output.
   std::unordered_map<std::string, std::string> uniqueNames() const;
+
   std::string toString() const;
 
   void reset() {

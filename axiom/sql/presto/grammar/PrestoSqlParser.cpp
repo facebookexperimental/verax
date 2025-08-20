@@ -16,13 +16,12 @@
 
 // Generated from PrestoSql.g4 by ANTLR 4.9.3
 
-#include "axiom/sql/presto/PrestoSqlListener.h"
-#include "axiom/sql/presto/PrestoSqlVisitor.h"
-
-#include "axiom/sql/presto/PrestoSqlParser.h"
+#include "axiom/sql/presto/grammar/PrestoSqlParser.h"
+#include "axiom/sql/presto/grammar/PrestoSqlListener.h"
+#include "axiom/sql/presto/grammar/PrestoSqlVisitor.h"
 
 using namespace antlrcpp;
-using namespace facebook::velox::sql;
+using namespace axiom::sql::presto;
 using namespace antlr4;
 
 PrestoSqlParser::PrestoSqlParser(TokenStream* input) : Parser(input) {

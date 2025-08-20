@@ -20,7 +20,7 @@
 
 #include "antlr4-runtime.h"
 
-namespace facebook::velox::sql {
+namespace axiom::sql::presto {
 
 class PrestoSqlLexer : public antlr4::Lexer {
  public:
@@ -324,4 +324,4 @@ class PrestoSqlLexer : public antlr4::Lexer {
   static Initializer _init;
 };
 
-} // namespace facebook::velox::sql
+} // namespace axiom::sql::presto

@@ -92,10 +92,12 @@ VELOX_MAKE_BINARY_CALLER(Or, "or")
 class ExprApi {
  public:
   /* implicit */ ExprApi(core::ExprPtr expr)
-      : expr_{std::move(expr)}, name_{expr_->alias().value_or("")} {}
+      : expr_{std::move(expr)}, name_{expr_->alias()} {}
 
   ExprApi(core::ExprPtr expr, std::string name)
-      : expr_{std::move(expr)}, name_{std::move(name)} {}
+      : expr_{std::move(expr)}, name_{std::move(name)} {
+    VELOX_CHECK(!name_.value().empty());
+  }
 
   ExprApi(const ExprApi& other) = default;
 
@@ -187,7 +189,7 @@ class ExprApi {
 
   ExprApi operator!=(const Variant& value) const;
 
-  const std::string& name() const {
+  const std::optional<std::string>& name() const {
     return name_;
   }
 
@@ -197,7 +199,7 @@ class ExprApi {
 
  private:
   core::ExprPtr expr_;
-  std::string name_;
+  std::optional<std::string> name_;
 };
 
 ExprApi Lit(Variant&& val);
@@ -242,5 +244,40 @@ ExprApi Subquery(std::shared_ptr<const LogicalPlanNode> subquery);
 ExprApi Exists(const ExprApi& input);
 
 ExprApi Sql(const std::string& sql);
+
+// SortKey to use with sort operation.
+// e.g.
+//
+//  SortKey(Col("name"))                  -- name ASC
+//  SortKey(Col("name"), DESC)            -- name DESC
+//  SortKey(Col("name"), ASC_NULLS_LAST)  -- name ASC NULLS LAST
+
+namespace sorting {
+// Default is ASC NULLS LAST.
+template <bool ascending = true, bool nullsFirst = false>
+struct Order {};
+} // namespace sorting
+
+constexpr sorting::Order<true> ASC;
+constexpr sorting::Order<false> DESC;
+
+constexpr sorting::Order<true, true> ASC_NULLS_FIRST;
+constexpr sorting::Order<true, false> ASC_NULLS_LAST;
+
+constexpr sorting::Order<false, true> DESC_NULLS_FIRST;
+constexpr sorting::Order<false, false> DESC_NULLS_LAST;
+
+struct SortKey {
+  template <bool ascending = true, bool nullsFirst = false>
+  explicit SortKey(ExprApi input, sorting::Order<ascending, nullsFirst> = ASC)
+      : expr{std::move(input)}, ascending{ascending}, nullsFirst(nullsFirst) {}
+
+  SortKey(ExprApi input, bool ascending, bool nullsFirst)
+      : expr{std::move(input)}, ascending{ascending}, nullsFirst(nullsFirst) {}
+
+  const ExprApi expr;
+  const bool ascending;
+  const bool nullsFirst;
+};
 
 } // namespace facebook::velox::logical_plan

@@ -508,7 +508,7 @@ class LimitNode : public LogicalPlanNode {
     VELOX_USER_CHECK_GE(offset, 0);
     VELOX_USER_CHECK_GE(count, 0);
 
-    if (count == std::numeric_limits<int64_t>::max()) {
+    if (noLimit()) {
       VELOX_USER_CHECK_NE(
           offset, 0, "Offset must be > zero if there is no limit");
     }
@@ -520,6 +520,10 @@ class LimitNode : public LogicalPlanNode {
 
   int64_t count() const {
     return count_;
+  }
+
+  bool noLimit() const {
+    return count_ == std::numeric_limits<int64_t>::max();
   }
 
   void accept(const PlanNodeVisitor& visitor, PlanNodeVisitorContext& context)

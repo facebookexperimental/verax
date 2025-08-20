@@ -16,11 +16,11 @@
 
 // Generated from PrestoSql.g4 by ANTLR 4.9.3
 
-#include "axiom/sql/presto/PrestoSqlLexer.h"
+#include "axiom/sql/presto/grammar/PrestoSqlLexer.h"
 
 using namespace antlr4;
 
-using namespace facebook::velox::sql;
+using namespace axiom::sql::presto;
 
 PrestoSqlLexer::PrestoSqlLexer(CharStream* input) : Lexer(input) {
   _interpreter = new atn::LexerATNSimulator(

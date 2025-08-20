@@ -228,9 +228,18 @@ class PlanBuilder {
       const std::vector<std::string>& groupingKeys,
       const std::vector<std::string>& aggregates);
 
+  PlanBuilder& aggregate(
+      const std::vector<ExprApi>& groupingKeys,
+      const std::vector<ExprApi>& aggregates);
+
   PlanBuilder& join(
       const PlanBuilder& right,
       const std::string& condition,
+      JoinType joinType);
+
+  PlanBuilder& join(
+      const PlanBuilder& right,
+      const std::optional<ExprApi>& condition,
       JoinType joinType);
 
   PlanBuilder& crossJoin(const PlanBuilder& right) {
@@ -248,6 +257,8 @@ class PlanBuilder {
       const std::vector<PlanBuilder>& inputs);
 
   PlanBuilder& sort(const std::vector<std::string>& sortingKeys);
+
+  PlanBuilder& sort(const std::vector<SortKey>& sortingKeys);
 
   /// An alias for 'sort'.
   PlanBuilder& orderBy(const std::vector<std::string>& sortingKeys) {
@@ -271,6 +282,12 @@ class PlanBuilder {
 
     return *this;
   }
+
+  size_t numOutput() const;
+
+  std::vector<std::string> findOrAssignOutputNames() const;
+
+  std::string findOrAssignOutputNameAt(size_t index) const;
 
   LogicalPlanNodePtr build();
 

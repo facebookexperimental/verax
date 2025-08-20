@@ -19,9 +19,9 @@
 #pragma once
 
 #include "antlr4-runtime.h"
-#include "axiom/sql/presto/PrestoSqlVisitor.h"
+#include "axiom/sql/presto/grammar/PrestoSqlVisitor.h"
 
-namespace facebook::velox::sql {
+namespace axiom::sql::presto {
 
 /**
  * This class provides an empty implementation of PrestoSqlVisitor, which can be
@@ -1158,4 +1158,4 @@ class PrestoSqlBaseVisitor : public PrestoSqlVisitor {
   }
 };
 
-} // namespace facebook::velox::sql
+} // namespace axiom::sql::presto

@@ -18,9 +18,7 @@
 #include <gtest/gtest.h>
 #include "axiom/logical_plan/ExprApi.h"
 #include "axiom/logical_plan/PlanBuilder.h"
-#include "axiom/optimizer/tests/ParquetTpchTest.h"
-#include "axiom/optimizer/tests/QuerySqlParser.h"
-#include "axiom/optimizer/tests/QueryTestBase.h"
+#include "axiom/optimizer/tests/HiveQueriesTestBase.h"
 #include "velox/dwio/common/tests/utils/DataFiles.h"
 #include "velox/exec/tests/utils/TpchQueryBuilder.h"
 
@@ -35,29 +33,25 @@ namespace lp = facebook::velox::logical_plan;
 namespace facebook::velox::optimizer {
 namespace {
 
-class TpchPlanTest : public virtual test::QueryTestBase {
+class TpchPlanTest : public virtual test::HiveQueriesTestBase {
  protected:
   static void SetUpTestCase() {
-    test::ParquetTpchTest::createTables();
-
-    LocalRunnerTestBase::testDataPath_ = FLAGS_data_path;
-    LocalRunnerTestBase::localFileFormat_ = "parquet";
-    LocalRunnerTestBase::SetUpTestCase();
+    test::HiveQueriesTestBase::SetUpTestCase();
   }
 
   static void TearDownTestCase() {
     if (!FLAGS_history_save_path.empty()) {
       suiteHistory().saveToFile(FLAGS_history_save_path);
     }
-    LocalRunnerTestBase::TearDownTestCase();
+    test::HiveQueriesTestBase::TearDownTestCase();
   }
 
   void SetUp() override {
-    QueryTestBase::SetUp();
+    HiveQueriesTestBase::SetUp();
 
     referenceBuilder_ = std::make_unique<exec::test::TpchQueryBuilder>(
         dwio::common::FileFormat::PARQUET);
-    referenceBuilder_->initialize(FLAGS_data_path);
+    referenceBuilder_->initialize(LocalRunnerTestBase::testDataPath_);
   }
 
   void checkTpch(int32_t query, const lp::LogicalPlanNodePtr& logicalPlan) {
@@ -73,29 +67,6 @@ class TpchPlanTest : public virtual test::QueryTestBase {
       exec::test::assertEqualResults(
           referenceResult.results, singleResult.results);
     }
-  }
-
-  velox::optimizer::test::QuerySqlParser makeQueryParser() {
-    velox::optimizer::test::QuerySqlParser parser(
-        exec::test::kHiveConnectorId, pool());
-
-    auto registerTable = [&](const std::string& name) {
-      auto* table = connector::getConnector(exec::test::kHiveConnectorId)
-                        ->metadata()
-                        ->findTable(name);
-      parser.registerTable(name, table->rowType());
-    };
-
-    registerTable("region");
-    registerTable("nation");
-    registerTable("lineitem");
-    registerTable("orders");
-    registerTable("customer");
-    registerTable("supplier");
-    registerTable("part");
-    registerTable("partsupp");
-
-    return parser;
   }
 
   static std::string readSqlFromFile(const std::string& filePath) {
@@ -123,10 +94,8 @@ class TpchPlanTest : public virtual test::QueryTestBase {
   }
 
   void checkTpchSql(int32_t query) {
-    auto parser = makeQueryParser();
-
     auto sql = readSqlFromFile(fmt::format("tpch.queries/q{}.sql", query));
-    auto statement = parser.parse(sql);
+    auto statement = parser_->parse(sql);
 
     ASSERT_TRUE(statement->isSelect());
 
@@ -489,7 +458,7 @@ TEST_F(TpchPlanTest, q14) {
               "l_partkey = p_partkey "
               "and l_shipdate between '1995-09-01'::date and '1995-09-30'::date")
           .aggregate(
-              {},
+              std::vector<std::string>{},
               {
                   "sum(if(p_type like 'PROMO%', l_extendedprice * (1.0 - l_discount), 0.0)) as promo",
                   "sum(l_extendedprice * (1.0 - l_discount)) as total",

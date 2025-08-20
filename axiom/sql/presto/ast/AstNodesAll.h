@@ -13,9 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 
-// Generated from PrestoSql.g4 by ANTLR 4.9.3
+#include "axiom/sql/presto/ast/AstExpressions.h"
+#include "axiom/sql/presto/ast/AstFunctions.h"
+#include "axiom/sql/presto/ast/AstLiterals.h"
+#include "axiom/sql/presto/ast/AstNode.h"
+#include "axiom/sql/presto/ast/AstRelations.h"
+#include "axiom/sql/presto/ast/AstStatements.h"
+#include "axiom/sql/presto/ast/AstSupport.h"
 
-#include "axiom/sql/presto/PrestoSqlBaseVisitor.h"
+namespace axiom::sql::presto {
 
-using namespace facebook::velox::sql;
+using AstNodePtr = std::shared_ptr<Node>;
+using AstExpressionPtr = std::shared_ptr<Expression>;
+using AstStatementPtr = std::shared_ptr<Statement>;
+using AstRelationPtr = std::shared_ptr<Relation>;
+
+} // namespace axiom::sql::presto

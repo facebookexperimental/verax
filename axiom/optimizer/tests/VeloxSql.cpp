@@ -32,7 +32,7 @@
 #include "axiom/optimizer/SchemaResolver.h"
 #include "axiom/optimizer/VeloxHistory.h"
 #include "axiom/optimizer/connectors/ConnectorSplitSource.h"
-#include "axiom/optimizer/tests/QuerySqlParser.h"
+#include "axiom/optimizer/tests/DuckParser.h"
 #include "axiom/runner/LocalRunner.h"
 #include "velox/benchmarks/QueryBenchmarkBase.h"
 #include "velox/exec/PlanNodeStats.h"
@@ -236,8 +236,8 @@ class VeloxRunner : public QueryBenchmarkBase {
     connector::registerConnector(connector_);
   }
 
-  std::unique_ptr<optimizer::test::QuerySqlParser> setupQueryParser() {
-    auto parser = std::make_unique<optimizer::test::QuerySqlParser>(
+  std::unique_ptr<optimizer::test::DuckParser> setupQueryParser() {
+    auto parser = std::make_unique<optimizer::test::DuckParser>(
         kHiveConnectorId, optimizerPool_.get());
     auto& tables = dynamic_cast<connector::hive::LocalHiveConnectorMetadata*>(
                        connector_->metadata())
@@ -735,7 +735,7 @@ class VeloxRunner : public QueryBenchmarkBase {
   std::shared_ptr<connector::Connector> connector_;
   std::shared_ptr<optimizer::SchemaResolver> schema_;
   std::unique_ptr<optimizer::VeloxHistory> history_;
-  std::unique_ptr<optimizer::test::QuerySqlParser> parser_;
+  std::unique_ptr<optimizer::test::DuckParser> parser_;
   std::ofstream* record_{nullptr};
   std::ifstream* check_{nullptr};
   int32_t numPassed_{0};
