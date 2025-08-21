@@ -1326,7 +1326,19 @@ TEST_F(PlanTest, unnest) {
           }),
       });
 
-  // trivial
+  // just unnest
+  {
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}.values({rowVector}).unnest({"regions"}).build();
+
+    auto referencePlanUnnest = exec::test::PlanBuilder{}
+                                   .values({rowVector})
+                                   .unnest({"nation", "regions"}, {"regions"})
+                                   .planNode();
+
+    checkSame(logicalPlanUnnest, referencePlanUnnest);
+  }
+  // project after unnest
   {
     auto logicalPlanUnnest = lp::PlanBuilder{}
                                  .values({rowVector})
@@ -1342,7 +1354,7 @@ TEST_F(PlanTest, unnest) {
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  // correct group by
+  // group by before unnest, project after unnest
   {
     auto logicalPlanUnnest = lp::PlanBuilder{}
                                  .values({rowVector})
@@ -1360,7 +1372,7 @@ TEST_F(PlanTest, unnest) {
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  // correct order by
+  // order by before unnest, project after unnest
   {
     auto logicalPlanUnnest = lp::PlanBuilder{}
                                  .values({rowVector})
@@ -1378,7 +1390,7 @@ TEST_F(PlanTest, unnest) {
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  // correct limit
+  // limit before unnest, project after unnest
   {
     auto logicalPlanUnnest = lp::PlanBuilder{}
                                  .values({rowVector})
