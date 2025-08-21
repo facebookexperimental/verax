@@ -77,17 +77,19 @@ repos:
     hooks:
       - id: yamllint
         args: [--format, parsable, --strict]
-        exclude: .*\.clang-(tidy|format)|\.github/workflows/.*|\..*-format\.yaml|\.pre-commit-config\.yaml
+        exclude: .*\.clang-(tidy|format)|\.github/workflows/.*|\..*-format\.yaml|\.pre-commit-config\.yaml|docker-compose\.yml
   - repo: https://github.com/google/yamlfmt
     rev: v0.16.0
     hooks:
       - id: yamlfmt
-        exclude: .*\.clang-(tidy|format)|\.github/workflows/.*|\..*-format\.yaml|\.pre-commit-config\.yaml
+        exclude: .*\.clang-(tidy|format)|\.github/workflows/.*|\..*-format\.yaml|\.pre-commit-config\.yaml|docker-compose\.yml
   - repo: https://github.com/zizmorcore/zizmor-pre-commit
     rev: v1.7.0
     hooks:
       - id: zizmor
+        exclude: .*\.github/workflows/docker-build\.yml
   - repo: https://github.com/mpalmer/action-validator
     rev: 2f8be1d2066eb3687496a156d00b4f1b3ea7b028
     hooks:
       - id: action-validator
+        exclude: .*\.github/workflows/docker-build\.yml

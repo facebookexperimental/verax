@@ -1,0 +1,50 @@
+# Copyright (c) Meta Platforms, Inc. and its affiliates.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Docker Compose configuration for Verax development with ANTLR4 support
+version: '3.8'
+services:
+  # Base configuration block for common settings
+  base-block:
+    build:
+      context: .
+    environment:
+      NUM_THREADS: ${NUM_THREADS:-8}
+      CCACHE_DIR: /verax/.ccache
+    volumes:
+      - .:/verax:delegated
+    working_dir: /verax
+  # Verax development environment with ANTLR4 support
+  verax-dev:
+    extends: base-block
+    image: ghcr.io/facebookexperimental/verax/verax-dev:centos9-antlr
+    environment:
+      VELOX_DEPENDENCY_SOURCE: SYSTEM
+      ICU_SOURCE: SYSTEM
+      # ANTLR4 specific environment variables
+      ANTLR4_VERSION: 4.13.2
+      ANTLR4_JAR_PATH: /usr/local/lib/antlr-4.13.2-complete.jar
+      ANTLR4_ROOT: /usr/local
+      PKG_CONFIG_PATH: /usr/local/lib/pkgconfig
+    command: /bin/bash
+  # Alternative service for CI/testing
+  verax-ci:
+    extends: verax-dev
+    environment:
+      VELOX_DEPENDENCY_SOURCE: SYSTEM
+      ICU_SOURCE: SYSTEM
+      CCACHE_DIR: /verax/.ccache
+      MAKEFLAGS: NUM_THREADS=8 MAX_HIGH_MEM_JOBS=4 MAX_LINK_JOBS=4
+      CPU_TARGET: "avx"
+    command: make debug
