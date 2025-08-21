@@ -1203,7 +1203,7 @@ velox::core::PlanNodePtr ToVelox::makeJoin(
 }
 
 core::PlanNodePtr ToVelox::makeUnnest(
-    Unnest& op,
+    const Unnest& op,
     ExecutableFragment& fragment,
     std::vector<ExecutableFragment>& stages) {
   auto input = makeFragment(op.input(), fragment, stages);
