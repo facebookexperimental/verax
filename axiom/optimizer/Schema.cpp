@@ -125,10 +125,43 @@ SchemaTableCP Schema::findTable(
     schemaTable->columns[column->name()] = column;
     columns.push_back(column);
   }
+  auto findColumn = [&](const std::string& name) -> ColumnCP {
+    auto interned = toName(name);
+    for (auto* column : columns) {
+      if (column->name() == interned) {
+        return column;
+      }
+    }
+    VELOX_FAIL("Partition or order column not in layout columns");
+  };
+
+  auto layout = connectorTable->layouts()[0];
   DistributionType defaultDist;
+  defaultDist.partitionType = layout->partitionType();
+  if (defaultDist.partitionType &&
+      defaultDist.partitionType->numPartitions().has_value()) {
+    defaultDist.numPartitions =
+        defaultDist.partitionType->numPartitions().value();
+  }
   defaultDist.locus = defaultLocus_;
-  auto* pk =
-      schemaTable->addIndex(toName("pk"), 0, 0, {}, defaultDist, {}, columns);
+  ColumnVector partition;
+  for (auto& part : layout->partitionColumns()) {
+    partition.push_back(findColumn(part->name()));
+  }
+  ColumnVector order;
+  for (auto* column : layout->orderColumns()) {
+    order.push_back(findColumn(column->name()));
+  }
+
+  auto* pk = schemaTable->addIndex(
+      toName("pk"),
+      layout->uniquePrifixColumns(),
+      order.size(),
+      order,
+      defaultDist,
+      partition,
+      columns);
+  pk->layout = layout;
   addTable(schemaTable);
   pk->layout = connectorTable->layouts()[0];
   queryCtx()->optimization()->retainConnectorTable(std::move(connectorTable));
@@ -423,6 +456,9 @@ std::string Distribution::toString() const {
   std::stringstream out;
   if (!partition.empty()) {
     out << "P ";
+    if (distributionType.partitionType) {
+      out << " " << distributionType.partitionType->toString() << " ";
+    }
     exprsToString(partition, out);
     out << " " << distributionType.numPartitions << " ways";
   }

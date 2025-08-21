@@ -46,6 +46,15 @@ void planBreakpoint() {
   LOG(INFO) << "Join order breakpoint";
 }
 
+const connector::PartitionType* copartitionType(
+    const connector::PartitionType* first,
+    const connector::PartitionType* second) {
+  if (!first || !second) {
+    return nullptr;
+  }
+  return first->copartition(*second);
+}
+
 void PlanState::debugSetFirstTable(int32_t id) {
   if (dt->id() == debugDt) {
     debugPlacedTables.resize(1);
@@ -106,8 +115,8 @@ void Optimization::trace(
   if (event & options_.traceFlags) {
     std::cout << (event == OptimizerOptions::kRetained ? "Retained: "
                                                        : "Abandoned: ")
-              << id << ": " << cost.toString(true, true) << ": " << " "
-              << plan.toString(true, false) << std::endl;
+              << id << ": " << cost.toString(true, true) << ": "
+              << " " << plan.toString(true, false) << std::endl;
   }
 }
 
@@ -227,6 +236,11 @@ const PlanObjectSet& PlanState::downstreamColumns() const {
       } else if (targetColumns.contains(aggToPlace->columns()[i])) {
         result.unionColumns(aggToPlace->aggregates()[i - numGroupingKeys]);
       }
+    }
+  }
+  if (dt->write && !placed.contains(dt->write)) {
+    for (auto i = 0; i < dt->write->columns().size(); ++i) {
+      result.unionColumns(dt->write->values()[i]);
     }
   }
 
@@ -818,12 +832,82 @@ RelationOpPtr repartitionForAgg(const RelationOpPtr& plan, PlanState& state) {
   return repartition;
 }
 
+RelationOpPtr repartitionForWrite(const RelationOpPtr& plan, PlanState& state) {
+  if (isSingleWorker() || plan->distribution().distributionType.isGather) {
+    return plan;
+  }
+
+  const auto* write = state.dt->write;
+  auto& partition = write->layout()->partitionColumns();
+  if (partition.empty()) {
+    // The write is not partitioned on columns of the layout. ToVelox will add
+    // no or an arbitrary repartition regardless of plan.
+    return plan;
+  }
+
+  ExprVector keyValues;
+  for (auto i = 0; i < partition.size(); ++i) {
+    // find the value for the partition column.
+    auto name = toName(partition[i]->name());
+    auto it = std::find(write->columns().begin(), write->columns().end(), name);
+    if (it == write->columns().end()) {
+      // Not given. column default.
+      auto* column = write->layout()->table()->findColumn(name);
+      keyValues.push_back(make<Literal>(
+          Value(toType(column->type()), 1),
+          queryCtx()->registerVariant(
+              std::make_unique<Variant>(column->defaultValue()))));
+    } else {
+      keyValues.push_back(write->values()[i]);
+    }
+  }
+
+  auto partitionType = write->layout()->partitionType();
+  auto co = copartitionType(
+      plan->distribution().distributionType.partitionType,
+      write->layout()->partitionType());
+  // Copartitioning is possible if the same kind of function and the destination
+  // is not narrower.
+  bool shuffle = !co || co == write->layout()->partitionType();
+  if (!shuffle) {
+    // Then chekc that the partition keys are in the same order.
+    for (auto i = 0; i < keyValues.size(); ++i) {
+      auto key = keyValues[i];
+      auto nthKey = position(plan->distribution().partition, *key);
+      if (nthKey != i) {
+        shuffle = true;
+        break;
+      }
+    }
+  }
+  if (!shuffle) {
+    return plan;
+  }
+
+  Distribution distribution(
+      plan->distribution().distributionType, std::move(keyValues));
+  auto* repartition =
+      make<Repartition>(plan, std::move(distribution), plan->columns());
+  state.addCost(*repartition);
+  return repartition;
+}
+
 } // namespace
 
 void Optimization::addPostprocess(
     DerivedTableCP dt,
     RelationOpPtr& plan,
     PlanState& state) {
+  if (dt->write) {
+    VELOX_CHECK(
+        dt->aggregation == nullptr && dt->orderByKeys.empty() &&
+            dt->limit == -1 && dt->offset == 0,
+        "A write does not mix with other postprocess");
+    plan = repartitionForWrite(plan, state);
+    plan = make<TableWrite>(plan, dt->write);
+    return;
+  }
+
   if (dt->aggregation) {
     const auto& aggPlan = dt->aggregation;
 

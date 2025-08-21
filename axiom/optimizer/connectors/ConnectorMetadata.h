@@ -30,6 +30,8 @@ class ITypedExpr;
 using TypedExprPtr = std::shared_ptr<const ITypedExpr>;
 
 class PartitionFunctionSpec;
+using PartitionFunctionSpecPtr =
+    std::shared_ptr<const core::PartitionFunctionSpec>;
 } // namespace facebook::velox::core
 
 /// Base classes for schema elements used in execution. A
@@ -137,7 +139,13 @@ class Column {
  public:
   virtual ~Column() = default;
 
-  Column(const std::string& name, TypePtr type) : name_(name), type_(type) {}
+  Column(
+      const std::string& name,
+      TypePtr type,
+      std::optional<Variant> defaultValue = std::nullopt)
+      : name_(name),
+        type_(type),
+        defaultValue_(makeDefaultValue(type_, defaultValue)) {}
 
   const ColumnStatistics* stats() const {
     return latestStats_;
@@ -167,6 +175,10 @@ class Column {
     return type_;
   }
 
+  const Variant& defaultValue() const {
+    return defaultValue_;
+  }
+
   /// Returns approximate number of distinct values. Returns 'deflt' if no
   /// information.
   int64_t approxNumDistinct(int64_t deflt = 1000) const {
@@ -177,7 +189,7 @@ class Column {
  protected:
   const std::string name_;
   const TypePtr type_;
-
+  const Variant defaultValue_;
   // The latest element added to 'allStats_'.
   tsan_atomic<ColumnStatistics*> latestStats_{nullptr};
 
@@ -186,6 +198,10 @@ class Column {
   std::vector<std::unique_ptr<ColumnStatistics>> allStats_;
 
  private:
+  static Variant makeDefaultValue(
+      const TypePtr& type,
+      std::optional<Variant>& value);
+
   // Serializes changes to statistics.
   std::mutex mutex_;
 };
@@ -201,6 +217,45 @@ class Table;
 struct SortOrder {
   bool isAscending{true};
   bool isNullsFirst{true};
+};
+
+/// Represents a partitioning function. Partitions can be copartitioned if the
+/// types are compatible.
+class PartitionType {
+ public:
+  virtual std::optional<int32_t> numPartitions() const {
+    return std::nullopt;
+  }
+
+  /// Returns 'this' or '&other' if the partitions are
+  /// compatible. Partitions are compatible if data in one partitioned
+  /// dataset can only match data in the same partition of another
+  /// dataset if joined on equality of partition keys. Compatibility
+  /// is not strict equality in the case of e.g. Hive where a dataset
+  /// partitioned 8 ways is compatible with one partitioned 16 ways if
+  /// the function is the same. In such a case the partition to use is
+  /// the 8 way one. On the 16 side data from partitions 0 and 1 match
+  /// 0 on the 8 side and 2, 3 match 1 and so on.
+  virtual const PartitionType* copartition(const PartitionType& other) const {
+    return nullptr;
+  }
+
+  /// Returns a factory that makes partition functions. The function
+  /// gets a RowVector and calculates a partition number from the
+  /// columns identified by 'channels'. If channels[i] ==
+  /// kConstantChannel then the corresponding element of 'constants'
+  /// is used. 'isLocal' differentiates between remote and ocal
+  /// exchange.
+  virtual core::PartitionFunctionSpecPtr makeSpec(
+      const std::vector<column_index_t>& channels,
+      const std::vector<VectorPtr>& constants,
+      bool isLocal) const {
+    VELOX_UNSUPPORTED("Empty partition type has no partition spec");
+  }
+
+  virtual std::string toString() const {
+    return "none";
+  }
 };
 
 /// Represents a physical manifestation of a table. There is at least
@@ -270,6 +325,13 @@ class TableLayout {
     return partitionColumns_;
   }
 
+  ///  Returns a partitionType. Describes how the value in partitionColumns()
+  ///  determines a partition. The returned value is owned by 'this'. nullptr if
+  ///  'partitionColumns_' is empty.
+  virtual const PartitionType* partitionType() const {
+    return nullptr;
+  }
+
   /// Columns on which content is ordered within the range of rows covered by a
   /// Split.
   const std::vector<const Column*>& orderColumns() const {
@@ -286,9 +348,16 @@ class TableLayout {
   /// support lookup. An index lookup has 0 or more equalities
   /// followed by up to one range. The equalities need to be on
   /// contiguous, leading parts of the column list and the range must
-  /// be on the next. This coresponds to a multipart key.
+  /// be on the next. This coresponds to a multipart key. This is expected to
+  /// correspond to orderColumns if non-empty.
   const std::vector<const Column*>& lookupKeys() const {
     return lookupKeys_;
+  }
+
+  ///  Numb er of leading equalities  on orderColumns or lookupKeys needed to
+  ///  get exactly one or zero matches.
+  virtual int32_t uniquePrifixColumns() const {
+    return 0;
   }
 
   /// True if a full table scan is supported. Some lookup sources prohibit this.
@@ -534,20 +603,6 @@ struct LookupKeys {
   bool isAscending{true};
 };
 
-/// Describes how to repartition data before a TableWriter.
-struct WritePartitionInfo {
-  /// Columns for partitioning,. Names refer to the column names in the insert
-  /// table handle. Empty if any worker can write any row.
-  const std::vector<std::string> columns;
-
-  /// Specifies the partition function. nullptr if 'columns' is empty.
-  const std::shared_ptr<const core::PartitionFunctionSpec> partitionSpec;
-
-  /// Maximum number of workers. For example, having more workers than there are
-  /// partitions makes no sense.
-  const int32_t maxWorkers;
-};
-
 /// Representts session status for update operations. May for
 /// example encapsulate a transaction state. The minimal
 /// implementation does nothing, which amounts to all write
@@ -712,23 +767,25 @@ class ConnectorMetadata {
     VELOX_UNSUPPORTED();
   }
 
-  /// Returns specification for repartitioning data before the table writer
-  /// stage.
-  virtual WritePartitionInfo writePartitionInfo(
-      const ConnectorInsertTableHandlePtr& handle) {
-    VELOX_UNSUPPORTED();
-  }
-
   /// Finalizes a table write. This runs once after all the table writers have
   /// finished. The result sets from the table writer fragments are passed as
   /// 'writerResults'. Their format and meaning is connector specific. the
-  /// RowType is given by the outputType() of the TableWriter.
+  /// RowType is given by the outputType() of the TableWriter. If 'success' is
+  /// false, the write should be cancelled and possible partial results deleted.
+  /// In this case 'writerResult' may be empty.
   virtual void finishWrite(
       const TableLayout& layout,
       const ConnectorInsertTableHandlePtr& handle,
+      bool success,
       const std::vector<RowVectorPtr>& writerResult,
       WriteKind kind,
       const ConnectorSessionPtr& session) {
+    VELOX_UNSUPPORTED();
+  }
+
+  /// Returns the output type of TableWrite operator for a row with columns as
+  /// in 'rowType'.
+  virtual RowTypePtr tableWriteOutputType(const RowTypePtr& rowType) const {
     VELOX_UNSUPPORTED();
   }
 

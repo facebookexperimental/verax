@@ -453,6 +453,11 @@ class Optimization {
     retainedTables_.insert(std::move(table));
   }
 
+  const std::unordered_set<connector::ConnectorTablePtr> retainedTables()
+      const {
+    return retainedTables_;
+  }
+
   /// If false, correlation names are not included in Column::toString(). Used
   /// for canonicalizing join cache keys.
   bool& cnamesInExpr() {
@@ -475,6 +480,10 @@ class Optimization {
 
   /// Produces trace output if event matches 'traceFlags_'.
   void trace(int32_t event, int32_t id, const Cost& cost, RelationOp& plan);
+
+  connector::ConnectorInsertTableHandlePtr writeHandle(int32_t id) {
+    return toGraph_.writeHandles().at(id);
+  }
 
  private:
   // Retrieves or makes a plan from 'key'. 'key' specifies a set of top level
@@ -643,6 +652,14 @@ class Optimization {
 };
 
 const JoinEdgeVector& joinedBy(PlanObjectCP table);
+
+/// Compares 'first' and 'second' and returns the one that should be
+/// the repartition partitioning to do copartition with the two. If
+/// there is no copartition possibility or if either or both are
+/// nullptr, returns nullptr.
+const connector::PartitionType* copartitionType(
+    const connector::PartitionType* first,
+    const connector::PartitionType* second);
 
 /// Returns  the inverse join type, e.g. right outer from left outer.
 /// TODO Move this function to Velox.
