@@ -1073,6 +1073,20 @@ PlanBuilder& PlanBuilder::offset(int64_t offset) {
   return *this;
 }
 
+PlanBuilder& PlanBuilder::tableWrite(
+    const std::string& connectorId,
+    const std::string& tableName,
+    WriteKind kind,
+    const std::vector<std::string>& columnNames,
+    const std::unordered_map<std::string, std::string> options) {
+  VELOX_USER_CHECK_NOT_NULL(node_, "Table write node cannot be a leaf node");
+
+  node_ = std::make_shared<TableWriteNode>(
+      nextId(), node_, connectorId, tableName, kind, columnNames, options);
+
+  return *this;
+}
+
 ExprPtr PlanBuilder::resolveInputName(
     const std::optional<std::string>& alias,
     const std::string& name) const {

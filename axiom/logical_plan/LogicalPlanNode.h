@@ -33,6 +33,7 @@ enum class NodeKind {
   kLimit = 7,
   kSet = 8,
   kUnnest = 9,
+  kTableWrite = 10,
 };
 
 VELOX_DECLARE_ENUM_NAME(NodeKind)
@@ -673,4 +674,88 @@ class UnnestNode : public LogicalPlanNode {
 
 using UnnestNodePtr = std::shared_ptr<const UnnestNode>;
 
+/// Corresponds to connector::WriteKind.
+enum class WriteKind {
+  // Rows are added and all columns must be specified for the TableWriter. This
+  // covers insert, create table and replacing a Hive partition and any other
+  // use that adds whole rows.
+  kInsert,
+
+  // Individual rows are deleted. Only row ids as per
+  // ConnectorMetadata::rowIdHandles() are passed to the TableWriter.
+  kDelete,
+
+  // Column values in individual rows are changed. The TableWriter
+  // gets first the row ids as per ConnectorMetadata::rowIdHandles()
+  // and then new values for the columns being changed. The new values
+  // may overlap with row ids if the row id is a set of primary key
+  // columns.
+  kUpdate
+};
+
+VELOX_DECLARE_ENUM_NAME(WriteKind);
+
+class TableWriteNode : public LogicalPlanNode {
+ public:
+  TableWriteNode(
+      const std::string& id,
+      const LogicalPlanNodePtr& input,
+      const std::string& connectorId,
+      const std::string& tableName,
+      WriteKind kind,
+      const std::vector<std::string>& columnNames,
+      const std::unordered_map<std::string, std::string>& options = {})
+      : LogicalPlanNode(NodeKind::kTableWrite, id, {input}, makeWriteType()),
+        connectorId_(connectorId),
+        tableName_(tableName),
+        writeKind_(kind),
+        columnNames_(columnNames),
+        options_(options) {}
+
+  const std::string& connectorId() const {
+    return connectorId_;
+  }
+
+  const std::string& tableName() const {
+    return tableName_;
+  }
+
+  WriteKind writeKind() const {
+    return writeKind_;
+  }
+
+  const std::vector<std::string> columnNames() const {
+    return columnNames_;
+  }
+
+  const std::unordered_map<std::string, std::string>& options() const {
+    return options_;
+  }
+
+  void accept(const PlanNodeVisitor& visitor, PlanNodeVisitorContext& context)
+      const override;
+
+ private:
+  static RowTypePtr makeWriteType();
+
+  const std::string connectorId_;
+  const std::string tableName_;
+  const WriteKind writeKind_;
+  const std::vector<std::string> columnNames_;
+  const std::unordered_map<std::string, std::string> options_;
+};
+
+using TableWriteNodePtr = std::shared_ptr<const TableWriteNode>;
+
 } // namespace facebook::velox::logical_plan
+
+template <>
+struct fmt::formatter<facebook::velox::logical_plan::WriteKind>
+    : fmt::formatter<string_view> {
+  template <typename FormatContext>
+  auto format(facebook::velox::logical_plan::WriteKind k, FormatContext& ctx)
+      const {
+    return formatter<string_view>::format(
+        facebook::velox::logical_plan::WriteKindName::toName(k), ctx);
+  }
+};

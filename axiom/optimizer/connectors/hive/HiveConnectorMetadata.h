@@ -47,6 +47,41 @@ class HiveConnectorSession : public connector::ConnectorSession {
   ~HiveConnectorSession() override = default;
 };
 
+class HivePartitionType : public connector::PartitionType {
+ public:
+  HivePartitionType(int32_t numBuckets) : numBuckets_(numBuckets) {}
+
+  virtual std::optional<int32_t> numPartitions() const {
+    return numBuckets_;
+  }
+
+  // Types are compatible if the bucket count one is an interger multiple of the
+  // other. The partition to use for copartitioning is the one with the fewer
+  // buckets.
+  const PartitionType* copartition(const PartitionType& any) const override {
+    auto* other = dynamic_cast<const HivePartitionType*>(&any);
+    if (other == nullptr) {
+      return nullptr;
+    }
+    if (numBuckets_ <= other->numBuckets_) {
+      return other->numBuckets_ % numBuckets_ == 0 ? this : nullptr;
+    }
+    return numBuckets_ % other->numBuckets_ == 0 ? &any : nullptr;
+  }
+
+  core::PartitionFunctionSpecPtr makeSpec(
+      const std::vector<column_index_t>& channels,
+      const std::vector<VectorPtr>& constants,
+      bool isLocal) const override;
+
+  std::string toString() const override {
+    return fmt::format("Hive {} buckets", numBuckets_);
+  }
+
+ private:
+  const int32_t numBuckets_;
+};
+
 /// Describes a Hive table layout. Adds a file format and a list of
 /// Hive partitioning columns and an optional bucket count to the base
 /// TableLayout. The partitioning in TableLayout referes to bucketing.
@@ -80,7 +115,12 @@ class HiveTableLayout : public TableLayout {
             true),
         fileFormat_(fileFormat),
         hivePartitionColumns_(hivePartitionColumns),
-        numBuckets_(numBuckets) {}
+        numBuckets_(numBuckets),
+        partitionType_{numBuckets.has_value() ? numBuckets.value() : 0} {}
+
+  const PartitionType* partitionType() const override {
+    return partitionColumns().empty() ? nullptr : &partitionType_;
+  }
 
   dwio::common::FileFormat fileFormat() const {
     return fileFormat_;
@@ -104,6 +144,7 @@ class HiveTableLayout : public TableLayout {
   void updateStatsBuilders(
       const RowVectorPtr& data,
       std::vector<std::unique_ptr<dwrf::StatisticsBuilder>>& builders);
+  HivePartitionType partitionType_;
 };
 
 class HiveConnectorMetadata : public ConnectorMetadata {
@@ -134,6 +175,8 @@ class HiveConnectorMetadata : public ConnectorMetadata {
       WriteKind kind,
       const ConnectorSessionPtr& session) override;
 
+  RowTypePtr tableWriteOutputType(const RowTypePtr& rowType) const override;
+
   virtual dwio::common::FileFormat fileFormat() const {
     VELOX_UNSUPPORTED();
   }
@@ -156,6 +199,10 @@ class HiveConnectorMetadata : public ConnectorMetadata {
   /// 'this'. Directories inside this correspond to schemas and
   /// tables.
   virtual std::string dataPath() const {
+    VELOX_UNSUPPORTED();
+  }
+
+  virtual std::string makeStagingDirectory() {
     VELOX_UNSUPPORTED();
   }
 

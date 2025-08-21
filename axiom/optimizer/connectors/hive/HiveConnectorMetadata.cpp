@@ -22,6 +22,14 @@
 
 namespace facebook::velox::connector::hive {
 
+core::PartitionFunctionSpecPtr HivePartitionType::makeSpec(
+    const std::vector<column_index_t>& channels,
+    const std::vector<VectorPtr>& constants,
+    bool isLocal) const {
+  return std::make_shared<HivePartitionFunctionSpec>(
+      numBuckets_, channels, constants);
+}
+
 namespace {
 HiveColumnHandle::ColumnType columnType(
     const HiveTableLayout& layout,
@@ -173,7 +181,7 @@ ConnectorInsertTableHandlePtr HiveConnectorMetadata::createInsertTableHandle(
       inputColumns,
       makeLocationHandle(
           fmt::format("{}/{}", dataPath(), layout.table()->name()),
-          std::nullopt),
+          makeStagingDirectory()),
       storageFormat,
       bucketProperty,
       compressionKind,
@@ -196,6 +204,13 @@ void HiveConnectorMetadata::validateOptions(
       VELOX_USER_FAIL("Option {} is not supported", pair.first);
     }
   }
+}
+
+RowTypePtr HiveConnectorMetadata::tableWriteOutputType(
+    const RowTypePtr& /*rowType*/) const {
+  return ROW(
+      {"numWrittenRows", "fragment", "tableCommitContext"},
+      {BIGINT(), VARBINARY(), VARBINARY()});
 }
 
 } // namespace facebook::velox::connector::hive

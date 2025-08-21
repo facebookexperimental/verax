@@ -262,6 +262,13 @@ class PlanBuilder {
 
   PlanBuilder& offset(int64_t offset);
 
+  PlanBuilder& tableWrite(
+      const std::string& connectorId,
+      const std::string& tableName,
+      WriteKind kind,
+      const std::vector<std::string>& columnNames,
+      const std::unordered_map<std::string, std::string> options = {});
+
   PlanBuilder& as(const std::string& alias);
 
   PlanBuilder& captureScope(Scope& scope) {

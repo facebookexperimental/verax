@@ -201,9 +201,18 @@ PlanAndStats ToVelox::toVeloxPlan(
   top.fragment.planNode = makeFragment(std::move(plan), top, stages);
 
   stages.push_back(std::move(top));
+  axiom::runner::FinishWrite finishWrites = nullptr;
+  if (!finishWrites_.empty()) {
+    finishWrites = [finishes = std::move(finishWrites_)](
+                       bool success, const std::vector<RowVectorPtr>& results) {
+      for (auto& finish : finishes) {
+        finish(success, results);
+      }
+    };
+  }
   return PlanAndStats{
       std::make_shared<axiom::runner::MultiFragmentPlan>(
-          std::move(stages), options),
+          std::move(stages), options, finishWrites),
       std::move(nodeHistory_),
       std::move(prediction_)};
 }
@@ -855,8 +864,8 @@ template <typename ExprType>
 core::PartitionFunctionSpecPtr createPartitionFunctionSpec(
     const RowTypePtr& inputType,
     const std::vector<ExprType>& keys,
-    bool isBroadcast) {
-  if (isBroadcast) {
+    const Distribution& distribution) {
+  if (distribution.isBroadcast) {
     return std::make_shared<BroadcastPartitionFunctionSpec>();
   }
 
@@ -870,8 +879,12 @@ core::PartitionFunctionSpecPtr createPartitionFunctionSpec(
     keyIndices.push_back(inputType->getChildIdx(
         dynamic_cast<const core::FieldAccessTypedExpr*>(key.get())->name()));
   }
-  return std::make_shared<HashPartitionFunctionSpec>(
-      inputType, std::move(keyIndices));
+  if (!distribution.distributionType.partitionType) {
+    return std::make_shared<HashPartitionFunctionSpec>(
+        inputType, std::move(keyIndices));
+  }
+  return distribution.distributionType.partitionType->makeSpec(
+      keyIndices, {}, false);
 }
 
 bool hasSubfieldPushdown(const TableScan& scan) {
@@ -1216,8 +1229,8 @@ core::PlanNodePtr ToVelox::makeAggregation(
       project = core::LocalPartitionNode::gather(nextId(), std::move(inputs));
       fragment.width = 1;
     } else {
-      auto partition =
-          createPartitionFunctionSpec(project->outputType(), keys, false);
+      auto partition = createPartitionFunctionSpec(
+          project->outputType(), keys, Distribution());
       project = std::make_shared<core::LocalPartitionNode>(
           nextId(),
           core::LocalPartitionNode::Type::kRepartition,
@@ -1257,7 +1270,7 @@ velox::core::PlanNodePtr ToVelox::makeRepartition(
   auto partitioningInput = project.maybeProject(sourcePlan);
 
   auto partitionFunctionFactory = createPartitionFunctionSpec(
-      partitioningInput->outputType(), keys, distribution.isBroadcast);
+      partitioningInput->outputType(), keys, distribution);
   if (distribution.isBroadcast) {
     source.numBroadcastDestinations = fragment.width;
   }
@@ -1371,6 +1384,95 @@ core::PlanNodePtr ToVelox::makeValues(
   return valuesNode;
 }
 
+core::PlanNodePtr ToVelox::makeWrite(
+    const TableWrite& op,
+    ExecutableFragment& fragment,
+    std::vector<axiom::runner::ExecutableFragment>& stages) {
+  core::PlanNodePtr input = makeFragment(op.input(), fragment, stages);
+  TempProjections projections(*this, *op.input());
+  auto* write = op.write;
+  auto* layout = write->layout();
+  auto handle = queryCtx()->optimization()->writeHandle(write->id());
+  std::vector<core::FieldAccessTypedExprPtr> fields;
+  for (auto value : write->values()) {
+    fields.push_back(projections.toFieldRef(value));
+  }
+  auto* partitionType = layout->partitionType();
+  auto& partitionColumns = layout->partitionColumns();
+  NameVector partition;
+  for (auto& column : partitionColumns) {
+    partition.push_back(toName(column->name()));
+  }
+
+  std::vector<column_index_t> channels;
+  std::vector<VectorPtr> constants;
+  for (auto i = 0; i < partition.size(); ++i) {
+    auto* name = partition[i];
+    auto it = std::find(write->columns().begin(), write->columns().end(), name);
+    if (it == write->columns().end()) {
+      auto* column = layout->table()->findColumn(name);
+      channels.push_back(kConstantChannel);
+      constants.push_back(BaseVector::createConstant(
+          column->type(),
+          column->defaultValue(),
+          1,
+          queryCtx()->optimization()->evaluator()->pool()));
+    } else {
+      channels.push_back(it - write->columns().begin());
+      constants.push_back(nullptr);
+    }
+  }
+
+  input = projections.maybeProject(input);
+  if (!partition.empty()) {
+    auto spec =
+        write->layout()->partitionType()->makeSpec(channels, constants, true);
+    auto inputs = std::vector<core::PlanNodePtr>{input};
+    input = std::make_shared<core::LocalPartitionNode>(
+        nextId(),
+        core::LocalPartitionNode::Type::kRepartition,
+        false,
+        spec,
+        inputs);
+  }
+  std::vector<std::string> columnNames;
+  std::transform(
+      write->columns().begin(),
+      write->columns().begin(),
+      columnNames.end(),
+      [](auto x) { return std::string(x); });
+  auto* metadata = write->layout()->connector()->metadata();
+  auto session = queryCtx()->optimization()->options().session;
+  std::unordered_set<connector::ConnectorTablePtr> retainedTables =
+      queryCtx()->optimization()->retainedTables();
+  // The finish function needs to capture the retained tables, which also keeps
+  // layout live past the Optimization.
+  finishWrites_.push_back(
+      [handle, metadata, layout, session, retainedTables](
+          bool success, const std::vector<RowVectorPtr>& results) {
+        metadata->finishWrite(
+            *layout,
+            handle,
+            success,
+            results,
+            connector::WriteKind::kInsert,
+            session);
+      });
+
+  auto outputType = metadata->tableWriteOutputType(layout->rowType());
+  return std::make_shared<core::TableWriteNode>(
+      nextId(),
+      input->outputType(),
+      columnNames,
+      nullptr,
+      std::make_shared<const core::InsertTableHandle>(
+          write->layout()->connector()->connectorId(), handle),
+      false,
+      outputType,
+      connector::CommitStrategy::kNoCommit,
+      input);
+}
+
 void ToVelox::makePredictionAndHistory(
     const core::PlanNodeId& id,
     const RelationOp* op) {
@@ -1408,6 +1510,8 @@ core::PlanNodePtr ToVelox::makeFragment(
       return makeUnionAll(*op->as<UnionAll>(), fragment, stages);
     case RelType::kValues:
       return makeValues(*op->as<Values>(), fragment);
+    case RelType::kTableWrite:
+      return makeWrite(*op->as<TableWrite>(), fragment, stages);
     default:
       VELOX_FAIL(
           "Unsupported RelationOp {}", static_cast<int32_t>(op->relType()));

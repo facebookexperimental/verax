@@ -1290,6 +1290,71 @@ PlanObjectP ToGraph::addLimit(const lp::LimitNode& limitNode) {
   return currentDt_;
 }
 
+PlanObjectP ToGraph::addWrite(const lp::TableWriteNode& tableWrite) {
+  VELOX_CHECK_NULL(currentDt_->write, "Only one TableWrite allowed");
+  auto connector = connector::getConnector(tableWrite.connectorId());
+  VELOX_CHECK_NOT_NULL(connector);
+  auto* metadata = connector->metadata();
+  VELOX_CHECK_NOT_NULL(metadata);
+
+  const auto* schemaTable =
+      schema_.findTable(tableWrite.connectorId(), tableWrite.tableName());
+  VELOX_CHECK_NOT_NULL(
+      schemaTable,
+      "Table not found: {} via connector {}",
+      tableWrite.tableName(),
+      tableWrite.connectorId());
+
+  VELOX_CHECK_EQ(
+      schemaTable->columnGroups.size(),
+      1,
+      "Only one materialization supported for table write");
+
+  auto* layout = schemaTable->columnGroups[0]->layout;
+
+  NameVector columns;
+  ExprVector values;
+  for (auto i = 0; i < tableWrite.columnNames().size(); ++i) {
+    columns.push_back(toName(tableWrite.columnNames()[i]));
+    values.push_back(
+        translateColumn(tableWrite.onlyInput()->outputType()->nameOf(i)));
+  }
+  ColumnVector outputColumns = {
+      make<Column>(
+          toName("numWrittenRows"), currentDt_, Value(toType(BIGINT()), 1)),
+      make<Column>(
+          toName("fragment"), currentDt_, Value(toType(VARBINARY()), 1)),
+      make<Column>(
+          toName("tableCommitContext"),
+          currentDt_,
+          Value(toType(VARBINARY()), 1))};
+
+  currentDt_->write = make<WritePlan>(
+      toName(tableWrite.tableName()),
+      layout,
+      tableWrite.writeKind(),
+      std::move(values),
+      std::move(columns),
+      outputColumns);
+  currentDt_->columns = outputColumns;
+
+  auto& options = queryCtx()->optimization()->options();
+  VELOX_CHECK_NOT_NULL(
+      options.session, "Must have a ConnectorSession for write operations");
+
+  VELOX_CHECK_EQ(tableWrite.writeKind(), lp::WriteKind::kInsert);
+
+  auto handle = metadata->createInsertTableHandle(
+      *layout,
+      tableWrite.onlyInput()->outputType(),
+      tableWrite.options(),
+      connector::WriteKind::kInsert,
+      options.session);
+  writeHandles_[currentDt_->write->id()] = handle;
+
+  return currentDt_;
+}
+
 namespace {
 bool hasNondeterministic(const lp::ExprPtr& expr) {
   if (const auto* call = expr->asUnchecked<lp::CallExpr>()) {
@@ -1609,6 +1674,10 @@ PlanObjectP ToGraph::makeQueryGraph(
       currentDt_->tableSet.add(setDt);
       return currentDt_;
     }
+    case lp::NodeKind::kTableWrite: {
+      wrapInDt(*node.onlyInput());
+      return addWrite(*node.asUnchecked<lp::TableWriteNode>());
+    }
     case lp::NodeKind::kUnnest:
     default:
       VELOX_NYI(
@@ -1621,7 +1690,7 @@ std::string leString(const lp::Expr* e) {
   return lp::ExprPrinter::toText(*e);
 }
 
-std::string pString(const lp::LogicalPlanNode* p) {
+std::string lpString(const lp::LogicalPlanNode* p) {
   return lp::PlanPrinter::toText(*p);
 }
 

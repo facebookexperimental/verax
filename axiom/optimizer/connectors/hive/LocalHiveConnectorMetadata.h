@@ -240,6 +240,7 @@ class LocalHiveConnectorMetadata : public HiveConnectorMetadata {
   void finishWrite(
       const TableLayout& layout,
       const ConnectorInsertTableHandlePtr& /*handle*/,
+      bool success,
       const std::vector<RowVectorPtr>& /*writerResult*/,
       WriteKind /*kind*/,
       const ConnectorSessionPtr& /*session*/) override;
@@ -248,6 +249,8 @@ class LocalHiveConnectorMetadata : public HiveConnectorMetadata {
   std::string dataPath() const override {
     return hiveConfig_->hiveLocalDataPath();
   }
+
+  std::string makeStagingDirectory() override;
 
   std::shared_ptr<connector::hive::LocationHandle> makeLocationHandle(
       std::string targetDirectory,
