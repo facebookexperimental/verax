@@ -12,9 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_executable(velox_presto_parser_test GrammarTest.cpp)
-
-find_package(antlr4-runtime REQUIRED)
+add_executable(velox_presto_parser_test GrammarTest.cpp ParserHelper.cpp)
 
 add_test(velox_presto_parser_test velox_presto_parser_test)
 

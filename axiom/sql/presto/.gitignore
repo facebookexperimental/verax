@@ -1,0 +1,15 @@
+# ANTLR4 generated files (these are now auto-generated during build)
+PrestoSqlBaseListener.cpp
+PrestoSqlBaseListener.h
+PrestoSqlBaseVisitor.cpp
+PrestoSqlBaseVisitor.h
+PrestoSqlLexer.cpp
+PrestoSqlLexer.h
+PrestoSqlListener.cpp
+PrestoSqlListener.h
+PrestoSqlParser.cpp
+PrestoSqlParser.h
+PrestoSqlVisitor.cpp
+PrestoSqlVisitor.h
+*.interp
+*.tokens

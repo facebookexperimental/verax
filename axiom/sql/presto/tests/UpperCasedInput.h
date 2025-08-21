@@ -19,7 +19,7 @@
 #include <sys/types.h>
 #include <cstddef>
 
-#include <antlr4-runtime/antlr4-runtime.h>
+#include "antlr4-runtime.h"
 
 namespace facebook::velox::sql {
 

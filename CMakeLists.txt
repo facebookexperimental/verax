@@ -32,9 +32,12 @@ if(POLICY CMP0135)
   set(CMAKE_POLICY_DEFAULT_CMP0135 NEW)
 endif()
 
-# Use ThirdPartyToolchain dependencies macros from Velox.
-list(PREPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/CMake"
-     "${PROJECT_SOURCE_DIR}/velox/CMake")
+list(
+  PREPEND
+  CMAKE_MODULE_PATH
+  "${PROJECT_SOURCE_DIR}/CMake"
+  "${PROJECT_SOURCE_DIR}/CMake/resolve_dependency_modules"
+  "${PROJECT_SOURCE_DIR}/velox/CMake")
 include(ResolveDependency)
 
 set(VELOX_BUILD_VECTOR_TEST_UTILS
@@ -128,6 +131,9 @@ velox_resolve_dependency(Boost 1.77.0 COMPONENTS ${BOOST_INCLUDE_LIBRARIES})
 velox_set_source(folly)
 velox_resolve_dependency(folly)
 
+velox_set_source(antlr4-runtime)
+velox_resolve_dependency(antlr4-runtime)
+
 # Use xxhash and xsimd from Velox for now.
 include_directories(.)
 include_directories(${CMAKE_BINARY_DIR})
@@ -140,3 +146,4 @@ add_subdirectory(velox)
 add_subdirectory(axiom/logical_plan)
 add_subdirectory(axiom/runner)
 add_subdirectory(axiom/optimizer)
+add_subdirectory(axiom/sql/presto)

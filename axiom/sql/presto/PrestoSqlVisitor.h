@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-// Generated from PrestoSql.g4 by ANTLR 4.9.3
+// Generated from PrestoSql.g4 by ANTLR 4.13.2
 
 #pragma once
 
+#include "PrestoSqlParser.h"
 #include "antlr4-runtime.h"
-#include "axiom/sql/presto/PrestoSqlParser.h"
 
 namespace facebook::velox::sql {
 
@@ -32,672 +32,642 @@ class PrestoSqlVisitor : public antlr4::tree::AbstractParseTreeVisitor {
   /**
    * Visit parse trees produced by PrestoSqlParser.
    */
-  virtual antlrcpp::Any visitSingleStatement(
+  virtual std::any visitSingleStatement(
       PrestoSqlParser::SingleStatementContext* context) = 0;
 
-  virtual antlrcpp::Any visitStandaloneExpression(
+  virtual std::any visitStandaloneExpression(
       PrestoSqlParser::StandaloneExpressionContext* context) = 0;
 
-  virtual antlrcpp::Any visitStandaloneRoutineBody(
+  virtual std::any visitStandaloneRoutineBody(
       PrestoSqlParser::StandaloneRoutineBodyContext* context) = 0;
 
-  virtual antlrcpp::Any visitStatementDefault(
+  virtual std::any visitStatementDefault(
       PrestoSqlParser::StatementDefaultContext* context) = 0;
 
-  virtual antlrcpp::Any visitUse(PrestoSqlParser::UseContext* context) = 0;
+  virtual std::any visitUse(PrestoSqlParser::UseContext* context) = 0;
 
-  virtual antlrcpp::Any visitCreateSchema(
+  virtual std::any visitCreateSchema(
       PrestoSqlParser::CreateSchemaContext* context) = 0;
 
-  virtual antlrcpp::Any visitDropSchema(
+  virtual std::any visitDropSchema(
       PrestoSqlParser::DropSchemaContext* context) = 0;
 
-  virtual antlrcpp::Any visitRenameSchema(
+  virtual std::any visitRenameSchema(
       PrestoSqlParser::RenameSchemaContext* context) = 0;
 
-  virtual antlrcpp::Any visitCreateTableAsSelect(
+  virtual std::any visitCreateTableAsSelect(
       PrestoSqlParser::CreateTableAsSelectContext* context) = 0;
 
-  virtual antlrcpp::Any visitCreateTable(
+  virtual std::any visitCreateTable(
       PrestoSqlParser::CreateTableContext* context) = 0;
 
-  virtual antlrcpp::Any visitDropTable(
+  virtual std::any visitDropTable(
       PrestoSqlParser::DropTableContext* context) = 0;
 
-  virtual antlrcpp::Any visitInsertInto(
+  virtual std::any visitInsertInto(
       PrestoSqlParser::InsertIntoContext* context) = 0;
 
-  virtual antlrcpp::Any visitDelete(
-      PrestoSqlParser::DeleteContext* context) = 0;
+  virtual std::any visitDelete(PrestoSqlParser::DeleteContext* context) = 0;
 
-  virtual antlrcpp::Any visitTruncateTable(
+  virtual std::any visitTruncateTable(
       PrestoSqlParser::TruncateTableContext* context) = 0;
 
-  virtual antlrcpp::Any visitRenameTable(
+  virtual std::any visitRenameTable(
       PrestoSqlParser::RenameTableContext* context) = 0;
 
-  virtual antlrcpp::Any visitRenameColumn(
+  virtual std::any visitRenameColumn(
       PrestoSqlParser::RenameColumnContext* context) = 0;
 
-  virtual antlrcpp::Any visitDropColumn(
+  virtual std::any visitDropColumn(
       PrestoSqlParser::DropColumnContext* context) = 0;
 
-  virtual antlrcpp::Any visitAddColumn(
+  virtual std::any visitAddColumn(
       PrestoSqlParser::AddColumnContext* context) = 0;
 
-  virtual antlrcpp::Any visitAddConstraint(
+  virtual std::any visitAddConstraint(
       PrestoSqlParser::AddConstraintContext* context) = 0;
 
-  virtual antlrcpp::Any visitDropConstraint(
+  virtual std::any visitDropConstraint(
       PrestoSqlParser::DropConstraintContext* context) = 0;
 
-  virtual antlrcpp::Any visitAlterColumnSetNotNull(
+  virtual std::any visitAlterColumnSetNotNull(
       PrestoSqlParser::AlterColumnSetNotNullContext* context) = 0;
 
-  virtual antlrcpp::Any visitAlterColumnDropNotNull(
+  virtual std::any visitAlterColumnDropNotNull(
       PrestoSqlParser::AlterColumnDropNotNullContext* context) = 0;
 
-  virtual antlrcpp::Any visitSetTableProperties(
+  virtual std::any visitSetTableProperties(
       PrestoSqlParser::SetTablePropertiesContext* context) = 0;
 
-  virtual antlrcpp::Any visitAnalyze(
-      PrestoSqlParser::AnalyzeContext* context) = 0;
+  virtual std::any visitAnalyze(PrestoSqlParser::AnalyzeContext* context) = 0;
 
-  virtual antlrcpp::Any visitCreateType(
+  virtual std::any visitCreateType(
       PrestoSqlParser::CreateTypeContext* context) = 0;
 
-  virtual antlrcpp::Any visitCreateView(
+  virtual std::any visitCreateView(
       PrestoSqlParser::CreateViewContext* context) = 0;
 
-  virtual antlrcpp::Any visitRenameView(
+  virtual std::any visitRenameView(
       PrestoSqlParser::RenameViewContext* context) = 0;
 
-  virtual antlrcpp::Any visitDropView(
-      PrestoSqlParser::DropViewContext* context) = 0;
+  virtual std::any visitDropView(PrestoSqlParser::DropViewContext* context) = 0;
 
-  virtual antlrcpp::Any visitCreateMaterializedView(
+  virtual std::any visitCreateMaterializedView(
       PrestoSqlParser::CreateMaterializedViewContext* context) = 0;
 
-  virtual antlrcpp::Any visitDropMaterializedView(
+  virtual std::any visitDropMaterializedView(
       PrestoSqlParser::DropMaterializedViewContext* context) = 0;
 
-  virtual antlrcpp::Any visitRefreshMaterializedView(
+  virtual std::any visitRefreshMaterializedView(
       PrestoSqlParser::RefreshMaterializedViewContext* context) = 0;
 
-  virtual antlrcpp::Any visitCreateFunction(
+  virtual std::any visitCreateFunction(
       PrestoSqlParser::CreateFunctionContext* context) = 0;
 
-  virtual antlrcpp::Any visitAlterFunction(
+  virtual std::any visitAlterFunction(
       PrestoSqlParser::AlterFunctionContext* context) = 0;
 
-  virtual antlrcpp::Any visitDropFunction(
+  virtual std::any visitDropFunction(
       PrestoSqlParser::DropFunctionContext* context) = 0;
 
-  virtual antlrcpp::Any visitCall(PrestoSqlParser::CallContext* context) = 0;
+  virtual std::any visitCall(PrestoSqlParser::CallContext* context) = 0;
 
-  virtual antlrcpp::Any visitCreateRole(
+  virtual std::any visitCreateRole(
       PrestoSqlParser::CreateRoleContext* context) = 0;
 
-  virtual antlrcpp::Any visitDropRole(
-      PrestoSqlParser::DropRoleContext* context) = 0;
+  virtual std::any visitDropRole(PrestoSqlParser::DropRoleContext* context) = 0;
 
-  virtual antlrcpp::Any visitGrantRoles(
+  virtual std::any visitGrantRoles(
       PrestoSqlParser::GrantRolesContext* context) = 0;
 
-  virtual antlrcpp::Any visitRevokeRoles(
+  virtual std::any visitRevokeRoles(
       PrestoSqlParser::RevokeRolesContext* context) = 0;
 
-  virtual antlrcpp::Any visitSetRole(
-      PrestoSqlParser::SetRoleContext* context) = 0;
+  virtual std::any visitSetRole(PrestoSqlParser::SetRoleContext* context) = 0;
 
-  virtual antlrcpp::Any visitGrant(PrestoSqlParser::GrantContext* context) = 0;
+  virtual std::any visitGrant(PrestoSqlParser::GrantContext* context) = 0;
 
-  virtual antlrcpp::Any visitRevoke(
-      PrestoSqlParser::RevokeContext* context) = 0;
+  virtual std::any visitRevoke(PrestoSqlParser::RevokeContext* context) = 0;
 
-  virtual antlrcpp::Any visitShowGrants(
+  virtual std::any visitShowGrants(
       PrestoSqlParser::ShowGrantsContext* context) = 0;
 
-  virtual antlrcpp::Any visitExplain(
-      PrestoSqlParser::ExplainContext* context) = 0;
+  virtual std::any visitExplain(PrestoSqlParser::ExplainContext* context) = 0;
 
-  virtual antlrcpp::Any visitShowCreateTable(
+  virtual std::any visitShowCreateTable(
       PrestoSqlParser::ShowCreateTableContext* context) = 0;
 
-  virtual antlrcpp::Any visitShowCreateView(
+  virtual std::any visitShowCreateView(
       PrestoSqlParser::ShowCreateViewContext* context) = 0;
 
-  virtual antlrcpp::Any visitShowCreateMaterializedView(
+  virtual std::any visitShowCreateMaterializedView(
       PrestoSqlParser::ShowCreateMaterializedViewContext* context) = 0;
 
-  virtual antlrcpp::Any visitShowCreateFunction(
+  virtual std::any visitShowCreateFunction(
       PrestoSqlParser::ShowCreateFunctionContext* context) = 0;
 
-  virtual antlrcpp::Any visitShowTables(
+  virtual std::any visitShowTables(
       PrestoSqlParser::ShowTablesContext* context) = 0;
 
-  virtual antlrcpp::Any visitShowSchemas(
+  virtual std::any visitShowSchemas(
       PrestoSqlParser::ShowSchemasContext* context) = 0;
 
-  virtual antlrcpp::Any visitShowCatalogs(
+  virtual std::any visitShowCatalogs(
       PrestoSqlParser::ShowCatalogsContext* context) = 0;
 
-  virtual antlrcpp::Any visitShowColumns(
+  virtual std::any visitShowColumns(
       PrestoSqlParser::ShowColumnsContext* context) = 0;
 
-  virtual antlrcpp::Any visitShowStats(
+  virtual std::any visitShowStats(
       PrestoSqlParser::ShowStatsContext* context) = 0;
 
-  virtual antlrcpp::Any visitShowStatsForQuery(
+  virtual std::any visitShowStatsForQuery(
       PrestoSqlParser::ShowStatsForQueryContext* context) = 0;
 
-  virtual antlrcpp::Any visitShowRoles(
+  virtual std::any visitShowRoles(
       PrestoSqlParser::ShowRolesContext* context) = 0;
 
-  virtual antlrcpp::Any visitShowRoleGrants(
+  virtual std::any visitShowRoleGrants(
       PrestoSqlParser::ShowRoleGrantsContext* context) = 0;
 
-  virtual antlrcpp::Any visitShowFunctions(
+  virtual std::any visitShowFunctions(
       PrestoSqlParser::ShowFunctionsContext* context) = 0;
 
-  virtual antlrcpp::Any visitShowSession(
+  virtual std::any visitShowSession(
       PrestoSqlParser::ShowSessionContext* context) = 0;
 
-  virtual antlrcpp::Any visitSetSession(
+  virtual std::any visitSetSession(
       PrestoSqlParser::SetSessionContext* context) = 0;
 
-  virtual antlrcpp::Any visitResetSession(
+  virtual std::any visitResetSession(
       PrestoSqlParser::ResetSessionContext* context) = 0;
 
-  virtual antlrcpp::Any visitStartTransaction(
+  virtual std::any visitStartTransaction(
       PrestoSqlParser::StartTransactionContext* context) = 0;
 
-  virtual antlrcpp::Any visitCommit(
-      PrestoSqlParser::CommitContext* context) = 0;
+  virtual std::any visitCommit(PrestoSqlParser::CommitContext* context) = 0;
 
-  virtual antlrcpp::Any visitRollback(
-      PrestoSqlParser::RollbackContext* context) = 0;
+  virtual std::any visitRollback(PrestoSqlParser::RollbackContext* context) = 0;
 
-  virtual antlrcpp::Any visitPrepare(
-      PrestoSqlParser::PrepareContext* context) = 0;
+  virtual std::any visitPrepare(PrestoSqlParser::PrepareContext* context) = 0;
 
-  virtual antlrcpp::Any visitDeallocate(
+  virtual std::any visitDeallocate(
       PrestoSqlParser::DeallocateContext* context) = 0;
 
-  virtual antlrcpp::Any visitExecute(
-      PrestoSqlParser::ExecuteContext* context) = 0;
+  virtual std::any visitExecute(PrestoSqlParser::ExecuteContext* context) = 0;
 
-  virtual antlrcpp::Any visitDescribeInput(
+  virtual std::any visitDescribeInput(
       PrestoSqlParser::DescribeInputContext* context) = 0;
 
-  virtual antlrcpp::Any visitDescribeOutput(
+  virtual std::any visitDescribeOutput(
       PrestoSqlParser::DescribeOutputContext* context) = 0;
 
-  virtual antlrcpp::Any visitUpdate(
-      PrestoSqlParser::UpdateContext* context) = 0;
+  virtual std::any visitUpdate(PrestoSqlParser::UpdateContext* context) = 0;
 
-  virtual antlrcpp::Any visitQuery(PrestoSqlParser::QueryContext* context) = 0;
+  virtual std::any visitQuery(PrestoSqlParser::QueryContext* context) = 0;
 
-  virtual antlrcpp::Any visitWith(PrestoSqlParser::WithContext* context) = 0;
+  virtual std::any visitWith(PrestoSqlParser::WithContext* context) = 0;
 
-  virtual antlrcpp::Any visitTableElement(
+  virtual std::any visitTableElement(
       PrestoSqlParser::TableElementContext* context) = 0;
 
-  virtual antlrcpp::Any visitColumnDefinition(
+  virtual std::any visitColumnDefinition(
       PrestoSqlParser::ColumnDefinitionContext* context) = 0;
 
-  virtual antlrcpp::Any visitLikeClause(
+  virtual std::any visitLikeClause(
       PrestoSqlParser::LikeClauseContext* context) = 0;
 
-  virtual antlrcpp::Any visitProperties(
+  virtual std::any visitProperties(
       PrestoSqlParser::PropertiesContext* context) = 0;
 
-  virtual antlrcpp::Any visitProperty(
-      PrestoSqlParser::PropertyContext* context) = 0;
+  virtual std::any visitProperty(PrestoSqlParser::PropertyContext* context) = 0;
 
-  virtual antlrcpp::Any visitSqlParameterDeclaration(
+  virtual std::any visitSqlParameterDeclaration(
       PrestoSqlParser::SqlParameterDeclarationContext* context) = 0;
 
-  virtual antlrcpp::Any visitRoutineCharacteristics(
+  virtual std::any visitRoutineCharacteristics(
       PrestoSqlParser::RoutineCharacteristicsContext* context) = 0;
 
-  virtual antlrcpp::Any visitRoutineCharacteristic(
+  virtual std::any visitRoutineCharacteristic(
       PrestoSqlParser::RoutineCharacteristicContext* context) = 0;
 
-  virtual antlrcpp::Any visitAlterRoutineCharacteristics(
+  virtual std::any visitAlterRoutineCharacteristics(
       PrestoSqlParser::AlterRoutineCharacteristicsContext* context) = 0;
 
-  virtual antlrcpp::Any visitAlterRoutineCharacteristic(
+  virtual std::any visitAlterRoutineCharacteristic(
       PrestoSqlParser::AlterRoutineCharacteristicContext* context) = 0;
 
-  virtual antlrcpp::Any visitRoutineBody(
+  virtual std::any visitRoutineBody(
       PrestoSqlParser::RoutineBodyContext* context) = 0;
 
-  virtual antlrcpp::Any visitReturnStatement(
+  virtual std::any visitReturnStatement(
       PrestoSqlParser::ReturnStatementContext* context) = 0;
 
-  virtual antlrcpp::Any visitExternalBodyReference(
+  virtual std::any visitExternalBodyReference(
       PrestoSqlParser::ExternalBodyReferenceContext* context) = 0;
 
-  virtual antlrcpp::Any visitLanguage(
-      PrestoSqlParser::LanguageContext* context) = 0;
+  virtual std::any visitLanguage(PrestoSqlParser::LanguageContext* context) = 0;
 
-  virtual antlrcpp::Any visitDeterminism(
+  virtual std::any visitDeterminism(
       PrestoSqlParser::DeterminismContext* context) = 0;
 
-  virtual antlrcpp::Any visitNullCallClause(
+  virtual std::any visitNullCallClause(
       PrestoSqlParser::NullCallClauseContext* context) = 0;
 
-  virtual antlrcpp::Any visitExternalRoutineName(
+  virtual std::any visitExternalRoutineName(
       PrestoSqlParser::ExternalRoutineNameContext* context) = 0;
 
-  virtual antlrcpp::Any visitQueryNoWith(
+  virtual std::any visitQueryNoWith(
       PrestoSqlParser::QueryNoWithContext* context) = 0;
 
-  virtual antlrcpp::Any visitQueryTermDefault(
+  virtual std::any visitQueryTermDefault(
       PrestoSqlParser::QueryTermDefaultContext* context) = 0;
 
-  virtual antlrcpp::Any visitSetOperation(
+  virtual std::any visitSetOperation(
       PrestoSqlParser::SetOperationContext* context) = 0;
 
-  virtual antlrcpp::Any visitQueryPrimaryDefault(
+  virtual std::any visitQueryPrimaryDefault(
       PrestoSqlParser::QueryPrimaryDefaultContext* context) = 0;
 
-  virtual antlrcpp::Any visitTable(PrestoSqlParser::TableContext* context) = 0;
+  virtual std::any visitTable(PrestoSqlParser::TableContext* context) = 0;
 
-  virtual antlrcpp::Any visitInlineTable(
+  virtual std::any visitInlineTable(
       PrestoSqlParser::InlineTableContext* context) = 0;
 
-  virtual antlrcpp::Any visitSubquery(
-      PrestoSqlParser::SubqueryContext* context) = 0;
+  virtual std::any visitSubquery(PrestoSqlParser::SubqueryContext* context) = 0;
 
-  virtual antlrcpp::Any visitSortItem(
-      PrestoSqlParser::SortItemContext* context) = 0;
+  virtual std::any visitSortItem(PrestoSqlParser::SortItemContext* context) = 0;
 
-  virtual antlrcpp::Any visitQuerySpecification(
+  virtual std::any visitQuerySpecification(
       PrestoSqlParser::QuerySpecificationContext* context) = 0;
 
-  virtual antlrcpp::Any visitGroupBy(
-      PrestoSqlParser::GroupByContext* context) = 0;
+  virtual std::any visitGroupBy(PrestoSqlParser::GroupByContext* context) = 0;
 
-  virtual antlrcpp::Any visitSingleGroupingSet(
+  virtual std::any visitSingleGroupingSet(
       PrestoSqlParser::SingleGroupingSetContext* context) = 0;
 
-  virtual antlrcpp::Any visitRollup(
-      PrestoSqlParser::RollupContext* context) = 0;
+  virtual std::any visitRollup(PrestoSqlParser::RollupContext* context) = 0;
 
-  virtual antlrcpp::Any visitCube(PrestoSqlParser::CubeContext* context) = 0;
+  virtual std::any visitCube(PrestoSqlParser::CubeContext* context) = 0;
 
-  virtual antlrcpp::Any visitMultipleGroupingSets(
+  virtual std::any visitMultipleGroupingSets(
       PrestoSqlParser::MultipleGroupingSetsContext* context) = 0;
 
-  virtual antlrcpp::Any visitGroupingSet(
+  virtual std::any visitGroupingSet(
       PrestoSqlParser::GroupingSetContext* context) = 0;
 
-  virtual antlrcpp::Any visitNamedQuery(
+  virtual std::any visitNamedQuery(
       PrestoSqlParser::NamedQueryContext* context) = 0;
 
-  virtual antlrcpp::Any visitSetQuantifier(
+  virtual std::any visitSetQuantifier(
       PrestoSqlParser::SetQuantifierContext* context) = 0;
 
-  virtual antlrcpp::Any visitSelectSingle(
+  virtual std::any visitSelectSingle(
       PrestoSqlParser::SelectSingleContext* context) = 0;
 
-  virtual antlrcpp::Any visitSelectAll(
+  virtual std::any visitSelectAll(
       PrestoSqlParser::SelectAllContext* context) = 0;
 
-  virtual antlrcpp::Any visitRelationDefault(
+  virtual std::any visitRelationDefault(
       PrestoSqlParser::RelationDefaultContext* context) = 0;
 
-  virtual antlrcpp::Any visitJoinRelation(
+  virtual std::any visitJoinRelation(
       PrestoSqlParser::JoinRelationContext* context) = 0;
 
-  virtual antlrcpp::Any visitJoinType(
-      PrestoSqlParser::JoinTypeContext* context) = 0;
+  virtual std::any visitJoinType(PrestoSqlParser::JoinTypeContext* context) = 0;
 
-  virtual antlrcpp::Any visitJoinCriteria(
+  virtual std::any visitJoinCriteria(
       PrestoSqlParser::JoinCriteriaContext* context) = 0;
 
-  virtual antlrcpp::Any visitSampledRelation(
+  virtual std::any visitSampledRelation(
       PrestoSqlParser::SampledRelationContext* context) = 0;
 
-  virtual antlrcpp::Any visitSampleType(
+  virtual std::any visitSampleType(
       PrestoSqlParser::SampleTypeContext* context) = 0;
 
-  virtual antlrcpp::Any visitAliasedRelation(
+  virtual std::any visitAliasedRelation(
       PrestoSqlParser::AliasedRelationContext* context) = 0;
 
-  virtual antlrcpp::Any visitColumnAliases(
+  virtual std::any visitColumnAliases(
       PrestoSqlParser::ColumnAliasesContext* context) = 0;
 
-  virtual antlrcpp::Any visitTableName(
+  virtual std::any visitTableName(
       PrestoSqlParser::TableNameContext* context) = 0;
 
-  virtual antlrcpp::Any visitSubqueryRelation(
+  virtual std::any visitSubqueryRelation(
       PrestoSqlParser::SubqueryRelationContext* context) = 0;
 
-  virtual antlrcpp::Any visitUnnest(
-      PrestoSqlParser::UnnestContext* context) = 0;
+  virtual std::any visitUnnest(PrestoSqlParser::UnnestContext* context) = 0;
 
-  virtual antlrcpp::Any visitLateral(
-      PrestoSqlParser::LateralContext* context) = 0;
+  virtual std::any visitLateral(PrestoSqlParser::LateralContext* context) = 0;
 
-  virtual antlrcpp::Any visitParenthesizedRelation(
+  virtual std::any visitParenthesizedRelation(
       PrestoSqlParser::ParenthesizedRelationContext* context) = 0;
 
-  virtual antlrcpp::Any visitExpression(
+  virtual std::any visitExpression(
       PrestoSqlParser::ExpressionContext* context) = 0;
 
-  virtual antlrcpp::Any visitLogicalNot(
+  virtual std::any visitLogicalNot(
       PrestoSqlParser::LogicalNotContext* context) = 0;
 
-  virtual antlrcpp::Any visitPredicated(
+  virtual std::any visitPredicated(
       PrestoSqlParser::PredicatedContext* context) = 0;
 
-  virtual antlrcpp::Any visitLogicalBinary(
+  virtual std::any visitLogicalBinary(
       PrestoSqlParser::LogicalBinaryContext* context) = 0;
 
-  virtual antlrcpp::Any visitComparison(
+  virtual std::any visitComparison(
       PrestoSqlParser::ComparisonContext* context) = 0;
 
-  virtual antlrcpp::Any visitQuantifiedComparison(
+  virtual std::any visitQuantifiedComparison(
       PrestoSqlParser::QuantifiedComparisonContext* context) = 0;
 
-  virtual antlrcpp::Any visitBetween(
-      PrestoSqlParser::BetweenContext* context) = 0;
+  virtual std::any visitBetween(PrestoSqlParser::BetweenContext* context) = 0;
 
-  virtual antlrcpp::Any visitInList(
-      PrestoSqlParser::InListContext* context) = 0;
+  virtual std::any visitInList(PrestoSqlParser::InListContext* context) = 0;
 
-  virtual antlrcpp::Any visitInSubquery(
+  virtual std::any visitInSubquery(
       PrestoSqlParser::InSubqueryContext* context) = 0;
 
-  virtual antlrcpp::Any visitLike(PrestoSqlParser::LikeContext* context) = 0;
+  virtual std::any visitLike(PrestoSqlParser::LikeContext* context) = 0;
 
-  virtual antlrcpp::Any visitNullPredicate(
+  virtual std::any visitNullPredicate(
       PrestoSqlParser::NullPredicateContext* context) = 0;
 
-  virtual antlrcpp::Any visitDistinctFrom(
+  virtual std::any visitDistinctFrom(
       PrestoSqlParser::DistinctFromContext* context) = 0;
 
-  virtual antlrcpp::Any visitValueExpressionDefault(
+  virtual std::any visitValueExpressionDefault(
       PrestoSqlParser::ValueExpressionDefaultContext* context) = 0;
 
-  virtual antlrcpp::Any visitConcatenation(
+  virtual std::any visitConcatenation(
       PrestoSqlParser::ConcatenationContext* context) = 0;
 
-  virtual antlrcpp::Any visitArithmeticBinary(
+  virtual std::any visitArithmeticBinary(
       PrestoSqlParser::ArithmeticBinaryContext* context) = 0;
 
-  virtual antlrcpp::Any visitArithmeticUnary(
+  virtual std::any visitArithmeticUnary(
       PrestoSqlParser::ArithmeticUnaryContext* context) = 0;
 
-  virtual antlrcpp::Any visitAtTimeZone(
+  virtual std::any visitAtTimeZone(
       PrestoSqlParser::AtTimeZoneContext* context) = 0;
 
-  virtual antlrcpp::Any visitDereference(
+  virtual std::any visitDereference(
       PrestoSqlParser::DereferenceContext* context) = 0;
 
-  virtual antlrcpp::Any visitTypeConstructor(
+  virtual std::any visitTypeConstructor(
       PrestoSqlParser::TypeConstructorContext* context) = 0;
 
-  virtual antlrcpp::Any visitSpecialDateTimeFunction(
+  virtual std::any visitSpecialDateTimeFunction(
       PrestoSqlParser::SpecialDateTimeFunctionContext* context) = 0;
 
-  virtual antlrcpp::Any visitSubstring(
+  virtual std::any visitSubstring(
       PrestoSqlParser::SubstringContext* context) = 0;
 
-  virtual antlrcpp::Any visitCast(PrestoSqlParser::CastContext* context) = 0;
+  virtual std::any visitCast(PrestoSqlParser::CastContext* context) = 0;
 
-  virtual antlrcpp::Any visitLambda(
-      PrestoSqlParser::LambdaContext* context) = 0;
+  virtual std::any visitLambda(PrestoSqlParser::LambdaContext* context) = 0;
 
-  virtual antlrcpp::Any visitParenthesizedExpression(
+  virtual std::any visitParenthesizedExpression(
       PrestoSqlParser::ParenthesizedExpressionContext* context) = 0;
 
-  virtual antlrcpp::Any visitParameter(
+  virtual std::any visitParameter(
       PrestoSqlParser::ParameterContext* context) = 0;
 
-  virtual antlrcpp::Any visitNormalize(
+  virtual std::any visitNormalize(
       PrestoSqlParser::NormalizeContext* context) = 0;
 
-  virtual antlrcpp::Any visitIntervalLiteral(
+  virtual std::any visitIntervalLiteral(
       PrestoSqlParser::IntervalLiteralContext* context) = 0;
 
-  virtual antlrcpp::Any visitNumericLiteral(
+  virtual std::any visitNumericLiteral(
       PrestoSqlParser::NumericLiteralContext* context) = 0;
 
-  virtual antlrcpp::Any visitBooleanLiteral(
+  virtual std::any visitBooleanLiteral(
       PrestoSqlParser::BooleanLiteralContext* context) = 0;
 
-  virtual antlrcpp::Any visitSimpleCase(
+  virtual std::any visitSimpleCase(
       PrestoSqlParser::SimpleCaseContext* context) = 0;
 
-  virtual antlrcpp::Any visitColumnReference(
+  virtual std::any visitColumnReference(
       PrestoSqlParser::ColumnReferenceContext* context) = 0;
 
-  virtual antlrcpp::Any visitNullLiteral(
+  virtual std::any visitNullLiteral(
       PrestoSqlParser::NullLiteralContext* context) = 0;
 
-  virtual antlrcpp::Any visitRowConstructor(
+  virtual std::any visitRowConstructor(
       PrestoSqlParser::RowConstructorContext* context) = 0;
 
-  virtual antlrcpp::Any visitSubscript(
+  virtual std::any visitSubscript(
       PrestoSqlParser::SubscriptContext* context) = 0;
 
-  virtual antlrcpp::Any visitSubqueryExpression(
+  virtual std::any visitSubqueryExpression(
       PrestoSqlParser::SubqueryExpressionContext* context) = 0;
 
-  virtual antlrcpp::Any visitBinaryLiteral(
+  virtual std::any visitBinaryLiteral(
       PrestoSqlParser::BinaryLiteralContext* context) = 0;
 
-  virtual antlrcpp::Any visitCurrentUser(
+  virtual std::any visitCurrentUser(
       PrestoSqlParser::CurrentUserContext* context) = 0;
 
-  virtual antlrcpp::Any visitExtract(
-      PrestoSqlParser::ExtractContext* context) = 0;
+  virtual std::any visitExtract(PrestoSqlParser::ExtractContext* context) = 0;
 
-  virtual antlrcpp::Any visitStringLiteral(
+  virtual std::any visitStringLiteral(
       PrestoSqlParser::StringLiteralContext* context) = 0;
 
-  virtual antlrcpp::Any visitArrayConstructor(
+  virtual std::any visitArrayConstructor(
       PrestoSqlParser::ArrayConstructorContext* context) = 0;
 
-  virtual antlrcpp::Any visitFunctionCall(
+  virtual std::any visitFunctionCall(
       PrestoSqlParser::FunctionCallContext* context) = 0;
 
-  virtual antlrcpp::Any visitExists(
-      PrestoSqlParser::ExistsContext* context) = 0;
+  virtual std::any visitExists(PrestoSqlParser::ExistsContext* context) = 0;
 
-  virtual antlrcpp::Any visitPosition(
-      PrestoSqlParser::PositionContext* context) = 0;
+  virtual std::any visitPosition(PrestoSqlParser::PositionContext* context) = 0;
 
-  virtual antlrcpp::Any visitSearchedCase(
+  virtual std::any visitSearchedCase(
       PrestoSqlParser::SearchedCaseContext* context) = 0;
 
-  virtual antlrcpp::Any visitGroupingOperation(
+  virtual std::any visitGroupingOperation(
       PrestoSqlParser::GroupingOperationContext* context) = 0;
 
-  virtual antlrcpp::Any visitBasicStringLiteral(
+  virtual std::any visitBasicStringLiteral(
       PrestoSqlParser::BasicStringLiteralContext* context) = 0;
 
-  virtual antlrcpp::Any visitUnicodeStringLiteral(
+  virtual std::any visitUnicodeStringLiteral(
       PrestoSqlParser::UnicodeStringLiteralContext* context) = 0;
 
-  virtual antlrcpp::Any visitNullTreatment(
+  virtual std::any visitNullTreatment(
       PrestoSqlParser::NullTreatmentContext* context) = 0;
 
-  virtual antlrcpp::Any visitTimeZoneInterval(
+  virtual std::any visitTimeZoneInterval(
       PrestoSqlParser::TimeZoneIntervalContext* context) = 0;
 
-  virtual antlrcpp::Any visitTimeZoneString(
+  virtual std::any visitTimeZoneString(
       PrestoSqlParser::TimeZoneStringContext* context) = 0;
 
-  virtual antlrcpp::Any visitComparisonOperator(
+  virtual std::any visitComparisonOperator(
       PrestoSqlParser::ComparisonOperatorContext* context) = 0;
 
-  virtual antlrcpp::Any visitComparisonQuantifier(
+  virtual std::any visitComparisonQuantifier(
       PrestoSqlParser::ComparisonQuantifierContext* context) = 0;
 
-  virtual antlrcpp::Any visitBooleanValue(
+  virtual std::any visitBooleanValue(
       PrestoSqlParser::BooleanValueContext* context) = 0;
 
-  virtual antlrcpp::Any visitInterval(
-      PrestoSqlParser::IntervalContext* context) = 0;
+  virtual std::any visitInterval(PrestoSqlParser::IntervalContext* context) = 0;
 
-  virtual antlrcpp::Any visitIntervalField(
+  virtual std::any visitIntervalField(
       PrestoSqlParser::IntervalFieldContext* context) = 0;
 
-  virtual antlrcpp::Any visitNormalForm(
+  virtual std::any visitNormalForm(
       PrestoSqlParser::NormalFormContext* context) = 0;
 
-  virtual antlrcpp::Any visitTypes(PrestoSqlParser::TypesContext* context) = 0;
+  virtual std::any visitTypes(PrestoSqlParser::TypesContext* context) = 0;
 
-  virtual antlrcpp::Any visitType(PrestoSqlParser::TypeContext* context) = 0;
+  virtual std::any visitType(PrestoSqlParser::TypeContext* context) = 0;
 
-  virtual antlrcpp::Any visitTypeParameter(
+  virtual std::any visitTypeParameter(
       PrestoSqlParser::TypeParameterContext* context) = 0;
 
-  virtual antlrcpp::Any visitBaseType(
-      PrestoSqlParser::BaseTypeContext* context) = 0;
+  virtual std::any visitBaseType(PrestoSqlParser::BaseTypeContext* context) = 0;
 
-  virtual antlrcpp::Any visitWhenClause(
+  virtual std::any visitWhenClause(
       PrestoSqlParser::WhenClauseContext* context) = 0;
 
-  virtual antlrcpp::Any visitFilter(
-      PrestoSqlParser::FilterContext* context) = 0;
+  virtual std::any visitFilter(PrestoSqlParser::FilterContext* context) = 0;
 
-  virtual antlrcpp::Any visitOver(PrestoSqlParser::OverContext* context) = 0;
+  virtual std::any visitOver(PrestoSqlParser::OverContext* context) = 0;
 
-  virtual antlrcpp::Any visitWindowFrame(
+  virtual std::any visitWindowFrame(
       PrestoSqlParser::WindowFrameContext* context) = 0;
 
-  virtual antlrcpp::Any visitUnboundedFrame(
+  virtual std::any visitUnboundedFrame(
       PrestoSqlParser::UnboundedFrameContext* context) = 0;
 
-  virtual antlrcpp::Any visitCurrentRowBound(
+  virtual std::any visitCurrentRowBound(
       PrestoSqlParser::CurrentRowBoundContext* context) = 0;
 
-  virtual antlrcpp::Any visitBoundedFrame(
+  virtual std::any visitBoundedFrame(
       PrestoSqlParser::BoundedFrameContext* context) = 0;
 
-  virtual antlrcpp::Any visitUpdateAssignment(
+  virtual std::any visitUpdateAssignment(
       PrestoSqlParser::UpdateAssignmentContext* context) = 0;
 
-  virtual antlrcpp::Any visitExplainFormat(
+  virtual std::any visitExplainFormat(
       PrestoSqlParser::ExplainFormatContext* context) = 0;
 
-  virtual antlrcpp::Any visitExplainType(
+  virtual std::any visitExplainType(
       PrestoSqlParser::ExplainTypeContext* context) = 0;
 
-  virtual antlrcpp::Any visitIsolationLevel(
+  virtual std::any visitIsolationLevel(
       PrestoSqlParser::IsolationLevelContext* context) = 0;
 
-  virtual antlrcpp::Any visitTransactionAccessMode(
+  virtual std::any visitTransactionAccessMode(
       PrestoSqlParser::TransactionAccessModeContext* context) = 0;
 
-  virtual antlrcpp::Any visitReadUncommitted(
+  virtual std::any visitReadUncommitted(
       PrestoSqlParser::ReadUncommittedContext* context) = 0;
 
-  virtual antlrcpp::Any visitReadCommitted(
+  virtual std::any visitReadCommitted(
       PrestoSqlParser::ReadCommittedContext* context) = 0;
 
-  virtual antlrcpp::Any visitRepeatableRead(
+  virtual std::any visitRepeatableRead(
       PrestoSqlParser::RepeatableReadContext* context) = 0;
 
-  virtual antlrcpp::Any visitSerializable(
+  virtual std::any visitSerializable(
       PrestoSqlParser::SerializableContext* context) = 0;
 
-  virtual antlrcpp::Any visitPositionalArgument(
+  virtual std::any visitPositionalArgument(
       PrestoSqlParser::PositionalArgumentContext* context) = 0;
 
-  virtual antlrcpp::Any visitNamedArgument(
+  virtual std::any visitNamedArgument(
       PrestoSqlParser::NamedArgumentContext* context) = 0;
 
-  virtual antlrcpp::Any visitPrivilege(
+  virtual std::any visitPrivilege(
       PrestoSqlParser::PrivilegeContext* context) = 0;
 
-  virtual antlrcpp::Any visitQualifiedName(
+  virtual std::any visitQualifiedName(
       PrestoSqlParser::QualifiedNameContext* context) = 0;
 
-  virtual antlrcpp::Any visitTableVersion(
+  virtual std::any visitTableVersion(
       PrestoSqlParser::TableVersionContext* context) = 0;
 
-  virtual antlrcpp::Any visitTableversionasof(
+  virtual std::any visitTableversionasof(
       PrestoSqlParser::TableversionasofContext* context) = 0;
 
-  virtual antlrcpp::Any visitTableversionbefore(
+  virtual std::any visitTableversionbefore(
       PrestoSqlParser::TableversionbeforeContext* context) = 0;
 
-  virtual antlrcpp::Any visitCurrentUserGrantor(
+  virtual std::any visitCurrentUserGrantor(
       PrestoSqlParser::CurrentUserGrantorContext* context) = 0;
 
-  virtual antlrcpp::Any visitCurrentRoleGrantor(
+  virtual std::any visitCurrentRoleGrantor(
       PrestoSqlParser::CurrentRoleGrantorContext* context) = 0;
 
-  virtual antlrcpp::Any visitSpecifiedPrincipal(
+  virtual std::any visitSpecifiedPrincipal(
       PrestoSqlParser::SpecifiedPrincipalContext* context) = 0;
 
-  virtual antlrcpp::Any visitUserPrincipal(
+  virtual std::any visitUserPrincipal(
       PrestoSqlParser::UserPrincipalContext* context) = 0;
 
-  virtual antlrcpp::Any visitRolePrincipal(
+  virtual std::any visitRolePrincipal(
       PrestoSqlParser::RolePrincipalContext* context) = 0;
 
-  virtual antlrcpp::Any visitUnspecifiedPrincipal(
+  virtual std::any visitUnspecifiedPrincipal(
       PrestoSqlParser::UnspecifiedPrincipalContext* context) = 0;
 
-  virtual antlrcpp::Any visitRoles(PrestoSqlParser::RolesContext* context) = 0;
+  virtual std::any visitRoles(PrestoSqlParser::RolesContext* context) = 0;
 
-  virtual antlrcpp::Any visitUnquotedIdentifier(
+  virtual std::any visitUnquotedIdentifier(
       PrestoSqlParser::UnquotedIdentifierContext* context) = 0;
 
-  virtual antlrcpp::Any visitQuotedIdentifier(
+  virtual std::any visitQuotedIdentifier(
       PrestoSqlParser::QuotedIdentifierContext* context) = 0;
 
-  virtual antlrcpp::Any visitBackQuotedIdentifier(
+  virtual std::any visitBackQuotedIdentifier(
       PrestoSqlParser::BackQuotedIdentifierContext* context) = 0;
 
-  virtual antlrcpp::Any visitDigitIdentifier(
+  virtual std::any visitDigitIdentifier(
       PrestoSqlParser::DigitIdentifierContext* context) = 0;
 
-  virtual antlrcpp::Any visitDecimalLiteral(
+  virtual std::any visitDecimalLiteral(
       PrestoSqlParser::DecimalLiteralContext* context) = 0;
 
-  virtual antlrcpp::Any visitDoubleLiteral(
+  virtual std::any visitDoubleLiteral(
       PrestoSqlParser::DoubleLiteralContext* context) = 0;
 
-  virtual antlrcpp::Any visitIntegerLiteral(
+  virtual std::any visitIntegerLiteral(
       PrestoSqlParser::IntegerLiteralContext* context) = 0;
 
-  virtual antlrcpp::Any visitConstraintSpecification(
+  virtual std::any visitConstraintSpecification(
       PrestoSqlParser::ConstraintSpecificationContext* context) = 0;
 
-  virtual antlrcpp::Any visitNamedConstraintSpecification(
+  virtual std::any visitNamedConstraintSpecification(
       PrestoSqlParser::NamedConstraintSpecificationContext* context) = 0;
 
-  virtual antlrcpp::Any visitUnnamedConstraintSpecification(
+  virtual std::any visitUnnamedConstraintSpecification(
       PrestoSqlParser::UnnamedConstraintSpecificationContext* context) = 0;
 
-  virtual antlrcpp::Any visitConstraintType(
+  virtual std::any visitConstraintType(
       PrestoSqlParser::ConstraintTypeContext* context) = 0;
 
-  virtual antlrcpp::Any visitConstraintQualifiers(
+  virtual std::any visitConstraintQualifiers(
       PrestoSqlParser::ConstraintQualifiersContext* context) = 0;
 
-  virtual antlrcpp::Any visitConstraintQualifier(
+  virtual std::any visitConstraintQualifier(
       PrestoSqlParser::ConstraintQualifierContext* context) = 0;
 
-  virtual antlrcpp::Any visitConstraintRely(
+  virtual std::any visitConstraintRely(
       PrestoSqlParser::ConstraintRelyContext* context) = 0;
 
-  virtual antlrcpp::Any visitConstraintEnabled(
+  virtual std::any visitConstraintEnabled(
       PrestoSqlParser::ConstraintEnabledContext* context) = 0;
 
-  virtual antlrcpp::Any visitConstraintEnforced(
+  virtual std::any visitConstraintEnforced(
       PrestoSqlParser::ConstraintEnforcedContext* context) = 0;
 
-  virtual antlrcpp::Any visitNonReserved(
+  virtual std::any visitNonReserved(
       PrestoSqlParser::NonReservedContext* context) = 0;
 };
 

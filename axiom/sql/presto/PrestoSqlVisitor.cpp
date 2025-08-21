@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-// Generated from PrestoSql.g4 by ANTLR 4.9.3
+// Generated from PrestoSql.g4 by ANTLR 4.13.2
 
-#include "axiom/sql/presto/PrestoSqlVisitor.h"
+#include "PrestoSqlVisitor.h"
 
 using namespace facebook::velox::sql;

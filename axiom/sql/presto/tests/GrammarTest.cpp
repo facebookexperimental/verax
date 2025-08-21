@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <antlr4-runtime/antlr4-runtime.h>
 #include <gtest/gtest.h>
+#include "antlr4-runtime.h"
 
 #include "axiom/sql/presto/tests/ParserHelper.h"
 

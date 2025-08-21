@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-// Generated from PrestoSql.g4 by ANTLR 4.9.3
+// Generated from PrestoSql.g4 by ANTLR 4.13.2
 
 #pragma once
 
+#include "PrestoSqlListener.h"
 #include "antlr4-runtime.h"
-#include "axiom/sql/presto/PrestoSqlListener.h"
 
 namespace facebook::velox::sql {
 

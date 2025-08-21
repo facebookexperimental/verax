@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-// Generated from PrestoSql.g4 by ANTLR 4.9.3
+// Generated from PrestoSql.g4 by ANTLR 4.13.2
 
 #pragma once
 
+#include "PrestoSqlVisitor.h"
 #include "antlr4-runtime.h"
-#include "axiom/sql/presto/PrestoSqlVisitor.h"
 
 namespace facebook::velox::sql {
 
@@ -30,1129 +30,1105 @@ namespace facebook::velox::sql {
  */
 class PrestoSqlBaseVisitor : public PrestoSqlVisitor {
  public:
-  virtual antlrcpp::Any visitSingleStatement(
+  virtual std::any visitSingleStatement(
       PrestoSqlParser::SingleStatementContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitStandaloneExpression(
+  virtual std::any visitStandaloneExpression(
       PrestoSqlParser::StandaloneExpressionContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitStandaloneRoutineBody(
+  virtual std::any visitStandaloneRoutineBody(
       PrestoSqlParser::StandaloneRoutineBodyContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitStatementDefault(
+  virtual std::any visitStatementDefault(
       PrestoSqlParser::StatementDefaultContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitUse(PrestoSqlParser::UseContext* ctx) override {
+  virtual std::any visitUse(PrestoSqlParser::UseContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitCreateSchema(
+  virtual std::any visitCreateSchema(
       PrestoSqlParser::CreateSchemaContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitDropSchema(
+  virtual std::any visitDropSchema(
       PrestoSqlParser::DropSchemaContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitRenameSchema(
+  virtual std::any visitRenameSchema(
       PrestoSqlParser::RenameSchemaContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitCreateTableAsSelect(
+  virtual std::any visitCreateTableAsSelect(
       PrestoSqlParser::CreateTableAsSelectContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitCreateTable(
+  virtual std::any visitCreateTable(
       PrestoSqlParser::CreateTableContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitDropTable(
+  virtual std::any visitDropTable(
       PrestoSqlParser::DropTableContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitInsertInto(
+  virtual std::any visitInsertInto(
       PrestoSqlParser::InsertIntoContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitDelete(
-      PrestoSqlParser::DeleteContext* ctx) override {
+  virtual std::any visitDelete(PrestoSqlParser::DeleteContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitTruncateTable(
+  virtual std::any visitTruncateTable(
       PrestoSqlParser::TruncateTableContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitRenameTable(
+  virtual std::any visitRenameTable(
       PrestoSqlParser::RenameTableContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitRenameColumn(
+  virtual std::any visitRenameColumn(
       PrestoSqlParser::RenameColumnContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitDropColumn(
+  virtual std::any visitDropColumn(
       PrestoSqlParser::DropColumnContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitAddColumn(
+  virtual std::any visitAddColumn(
       PrestoSqlParser::AddColumnContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitAddConstraint(
+  virtual std::any visitAddConstraint(
       PrestoSqlParser::AddConstraintContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitDropConstraint(
+  virtual std::any visitDropConstraint(
       PrestoSqlParser::DropConstraintContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitAlterColumnSetNotNull(
+  virtual std::any visitAlterColumnSetNotNull(
       PrestoSqlParser::AlterColumnSetNotNullContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitAlterColumnDropNotNull(
+  virtual std::any visitAlterColumnDropNotNull(
       PrestoSqlParser::AlterColumnDropNotNullContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSetTableProperties(
+  virtual std::any visitSetTableProperties(
       PrestoSqlParser::SetTablePropertiesContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitAnalyze(
-      PrestoSqlParser::AnalyzeContext* ctx) override {
+  virtual std::any visitAnalyze(PrestoSqlParser::AnalyzeContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitCreateType(
+  virtual std::any visitCreateType(
       PrestoSqlParser::CreateTypeContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitCreateView(
+  virtual std::any visitCreateView(
       PrestoSqlParser::CreateViewContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitRenameView(
+  virtual std::any visitRenameView(
       PrestoSqlParser::RenameViewContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitDropView(
+  virtual std::any visitDropView(
       PrestoSqlParser::DropViewContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitCreateMaterializedView(
+  virtual std::any visitCreateMaterializedView(
       PrestoSqlParser::CreateMaterializedViewContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitDropMaterializedView(
+  virtual std::any visitDropMaterializedView(
       PrestoSqlParser::DropMaterializedViewContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitRefreshMaterializedView(
+  virtual std::any visitRefreshMaterializedView(
       PrestoSqlParser::RefreshMaterializedViewContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitCreateFunction(
+  virtual std::any visitCreateFunction(
       PrestoSqlParser::CreateFunctionContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitAlterFunction(
+  virtual std::any visitAlterFunction(
       PrestoSqlParser::AlterFunctionContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitDropFunction(
+  virtual std::any visitDropFunction(
       PrestoSqlParser::DropFunctionContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitCall(PrestoSqlParser::CallContext* ctx) override {
+  virtual std::any visitCall(PrestoSqlParser::CallContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitCreateRole(
+  virtual std::any visitCreateRole(
       PrestoSqlParser::CreateRoleContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitDropRole(
+  virtual std::any visitDropRole(
       PrestoSqlParser::DropRoleContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitGrantRoles(
+  virtual std::any visitGrantRoles(
       PrestoSqlParser::GrantRolesContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitRevokeRoles(
+  virtual std::any visitRevokeRoles(
       PrestoSqlParser::RevokeRolesContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSetRole(
-      PrestoSqlParser::SetRoleContext* ctx) override {
+  virtual std::any visitSetRole(PrestoSqlParser::SetRoleContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitGrant(
-      PrestoSqlParser::GrantContext* ctx) override {
+  virtual std::any visitGrant(PrestoSqlParser::GrantContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitRevoke(
-      PrestoSqlParser::RevokeContext* ctx) override {
+  virtual std::any visitRevoke(PrestoSqlParser::RevokeContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitShowGrants(
+  virtual std::any visitShowGrants(
       PrestoSqlParser::ShowGrantsContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitExplain(
-      PrestoSqlParser::ExplainContext* ctx) override {
+  virtual std::any visitExplain(PrestoSqlParser::ExplainContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitShowCreateTable(
+  virtual std::any visitShowCreateTable(
       PrestoSqlParser::ShowCreateTableContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitShowCreateView(
+  virtual std::any visitShowCreateView(
       PrestoSqlParser::ShowCreateViewContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitShowCreateMaterializedView(
+  virtual std::any visitShowCreateMaterializedView(
       PrestoSqlParser::ShowCreateMaterializedViewContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitShowCreateFunction(
+  virtual std::any visitShowCreateFunction(
       PrestoSqlParser::ShowCreateFunctionContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitShowTables(
+  virtual std::any visitShowTables(
       PrestoSqlParser::ShowTablesContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitShowSchemas(
+  virtual std::any visitShowSchemas(
       PrestoSqlParser::ShowSchemasContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitShowCatalogs(
+  virtual std::any visitShowCatalogs(
       PrestoSqlParser::ShowCatalogsContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitShowColumns(
+  virtual std::any visitShowColumns(
       PrestoSqlParser::ShowColumnsContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitShowStats(
+  virtual std::any visitShowStats(
       PrestoSqlParser::ShowStatsContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitShowStatsForQuery(
+  virtual std::any visitShowStatsForQuery(
       PrestoSqlParser::ShowStatsForQueryContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitShowRoles(
+  virtual std::any visitShowRoles(
       PrestoSqlParser::ShowRolesContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitShowRoleGrants(
+  virtual std::any visitShowRoleGrants(
       PrestoSqlParser::ShowRoleGrantsContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitShowFunctions(
+  virtual std::any visitShowFunctions(
       PrestoSqlParser::ShowFunctionsContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitShowSession(
+  virtual std::any visitShowSession(
       PrestoSqlParser::ShowSessionContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSetSession(
+  virtual std::any visitSetSession(
       PrestoSqlParser::SetSessionContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitResetSession(
+  virtual std::any visitResetSession(
       PrestoSqlParser::ResetSessionContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitStartTransaction(
+  virtual std::any visitStartTransaction(
       PrestoSqlParser::StartTransactionContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitCommit(
-      PrestoSqlParser::CommitContext* ctx) override {
+  virtual std::any visitCommit(PrestoSqlParser::CommitContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitRollback(
+  virtual std::any visitRollback(
       PrestoSqlParser::RollbackContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitPrepare(
-      PrestoSqlParser::PrepareContext* ctx) override {
+  virtual std::any visitPrepare(PrestoSqlParser::PrepareContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitDeallocate(
+  virtual std::any visitDeallocate(
       PrestoSqlParser::DeallocateContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitExecute(
-      PrestoSqlParser::ExecuteContext* ctx) override {
+  virtual std::any visitExecute(PrestoSqlParser::ExecuteContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitDescribeInput(
+  virtual std::any visitDescribeInput(
       PrestoSqlParser::DescribeInputContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitDescribeOutput(
+  virtual std::any visitDescribeOutput(
       PrestoSqlParser::DescribeOutputContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitUpdate(
-      PrestoSqlParser::UpdateContext* ctx) override {
+  virtual std::any visitUpdate(PrestoSqlParser::UpdateContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitQuery(
-      PrestoSqlParser::QueryContext* ctx) override {
+  virtual std::any visitQuery(PrestoSqlParser::QueryContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitWith(PrestoSqlParser::WithContext* ctx) override {
+  virtual std::any visitWith(PrestoSqlParser::WithContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitTableElement(
+  virtual std::any visitTableElement(
       PrestoSqlParser::TableElementContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitColumnDefinition(
+  virtual std::any visitColumnDefinition(
       PrestoSqlParser::ColumnDefinitionContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitLikeClause(
+  virtual std::any visitLikeClause(
       PrestoSqlParser::LikeClauseContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitProperties(
+  virtual std::any visitProperties(
       PrestoSqlParser::PropertiesContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitProperty(
+  virtual std::any visitProperty(
       PrestoSqlParser::PropertyContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSqlParameterDeclaration(
+  virtual std::any visitSqlParameterDeclaration(
       PrestoSqlParser::SqlParameterDeclarationContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitRoutineCharacteristics(
+  virtual std::any visitRoutineCharacteristics(
       PrestoSqlParser::RoutineCharacteristicsContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitRoutineCharacteristic(
+  virtual std::any visitRoutineCharacteristic(
       PrestoSqlParser::RoutineCharacteristicContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitAlterRoutineCharacteristics(
+  virtual std::any visitAlterRoutineCharacteristics(
       PrestoSqlParser::AlterRoutineCharacteristicsContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitAlterRoutineCharacteristic(
+  virtual std::any visitAlterRoutineCharacteristic(
       PrestoSqlParser::AlterRoutineCharacteristicContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitRoutineBody(
+  virtual std::any visitRoutineBody(
       PrestoSqlParser::RoutineBodyContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitReturnStatement(
+  virtual std::any visitReturnStatement(
       PrestoSqlParser::ReturnStatementContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitExternalBodyReference(
+  virtual std::any visitExternalBodyReference(
       PrestoSqlParser::ExternalBodyReferenceContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitLanguage(
+  virtual std::any visitLanguage(
       PrestoSqlParser::LanguageContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitDeterminism(
+  virtual std::any visitDeterminism(
       PrestoSqlParser::DeterminismContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitNullCallClause(
+  virtual std::any visitNullCallClause(
       PrestoSqlParser::NullCallClauseContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitExternalRoutineName(
+  virtual std::any visitExternalRoutineName(
       PrestoSqlParser::ExternalRoutineNameContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitQueryNoWith(
+  virtual std::any visitQueryNoWith(
       PrestoSqlParser::QueryNoWithContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitQueryTermDefault(
+  virtual std::any visitQueryTermDefault(
       PrestoSqlParser::QueryTermDefaultContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSetOperation(
+  virtual std::any visitSetOperation(
       PrestoSqlParser::SetOperationContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitQueryPrimaryDefault(
+  virtual std::any visitQueryPrimaryDefault(
       PrestoSqlParser::QueryPrimaryDefaultContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitTable(
-      PrestoSqlParser::TableContext* ctx) override {
+  virtual std::any visitTable(PrestoSqlParser::TableContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitInlineTable(
+  virtual std::any visitInlineTable(
       PrestoSqlParser::InlineTableContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSubquery(
+  virtual std::any visitSubquery(
       PrestoSqlParser::SubqueryContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSortItem(
+  virtual std::any visitSortItem(
       PrestoSqlParser::SortItemContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitQuerySpecification(
+  virtual std::any visitQuerySpecification(
       PrestoSqlParser::QuerySpecificationContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitGroupBy(
-      PrestoSqlParser::GroupByContext* ctx) override {
+  virtual std::any visitGroupBy(PrestoSqlParser::GroupByContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSingleGroupingSet(
+  virtual std::any visitSingleGroupingSet(
       PrestoSqlParser::SingleGroupingSetContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitRollup(
-      PrestoSqlParser::RollupContext* ctx) override {
+  virtual std::any visitRollup(PrestoSqlParser::RollupContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitCube(PrestoSqlParser::CubeContext* ctx) override {
+  virtual std::any visitCube(PrestoSqlParser::CubeContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitMultipleGroupingSets(
+  virtual std::any visitMultipleGroupingSets(
       PrestoSqlParser::MultipleGroupingSetsContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitGroupingSet(
+  virtual std::any visitGroupingSet(
       PrestoSqlParser::GroupingSetContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitNamedQuery(
+  virtual std::any visitNamedQuery(
       PrestoSqlParser::NamedQueryContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSetQuantifier(
+  virtual std::any visitSetQuantifier(
       PrestoSqlParser::SetQuantifierContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSelectSingle(
+  virtual std::any visitSelectSingle(
       PrestoSqlParser::SelectSingleContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSelectAll(
+  virtual std::any visitSelectAll(
       PrestoSqlParser::SelectAllContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitRelationDefault(
+  virtual std::any visitRelationDefault(
       PrestoSqlParser::RelationDefaultContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitJoinRelation(
+  virtual std::any visitJoinRelation(
       PrestoSqlParser::JoinRelationContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitJoinType(
+  virtual std::any visitJoinType(
       PrestoSqlParser::JoinTypeContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitJoinCriteria(
+  virtual std::any visitJoinCriteria(
       PrestoSqlParser::JoinCriteriaContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSampledRelation(
+  virtual std::any visitSampledRelation(
       PrestoSqlParser::SampledRelationContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSampleType(
+  virtual std::any visitSampleType(
       PrestoSqlParser::SampleTypeContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitAliasedRelation(
+  virtual std::any visitAliasedRelation(
       PrestoSqlParser::AliasedRelationContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitColumnAliases(
+  virtual std::any visitColumnAliases(
       PrestoSqlParser::ColumnAliasesContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitTableName(
+  virtual std::any visitTableName(
       PrestoSqlParser::TableNameContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSubqueryRelation(
+  virtual std::any visitSubqueryRelation(
       PrestoSqlParser::SubqueryRelationContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitUnnest(
-      PrestoSqlParser::UnnestContext* ctx) override {
+  virtual std::any visitUnnest(PrestoSqlParser::UnnestContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitLateral(
-      PrestoSqlParser::LateralContext* ctx) override {
+  virtual std::any visitLateral(PrestoSqlParser::LateralContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitParenthesizedRelation(
+  virtual std::any visitParenthesizedRelation(
       PrestoSqlParser::ParenthesizedRelationContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitExpression(
+  virtual std::any visitExpression(
       PrestoSqlParser::ExpressionContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitLogicalNot(
+  virtual std::any visitLogicalNot(
       PrestoSqlParser::LogicalNotContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitPredicated(
+  virtual std::any visitPredicated(
       PrestoSqlParser::PredicatedContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitLogicalBinary(
+  virtual std::any visitLogicalBinary(
       PrestoSqlParser::LogicalBinaryContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitComparison(
+  virtual std::any visitComparison(
       PrestoSqlParser::ComparisonContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitQuantifiedComparison(
+  virtual std::any visitQuantifiedComparison(
       PrestoSqlParser::QuantifiedComparisonContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitBetween(
-      PrestoSqlParser::BetweenContext* ctx) override {
+  virtual std::any visitBetween(PrestoSqlParser::BetweenContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitInList(
-      PrestoSqlParser::InListContext* ctx) override {
+  virtual std::any visitInList(PrestoSqlParser::InListContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitInSubquery(
+  virtual std::any visitInSubquery(
       PrestoSqlParser::InSubqueryContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitLike(PrestoSqlParser::LikeContext* ctx) override {
+  virtual std::any visitLike(PrestoSqlParser::LikeContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitNullPredicate(
+  virtual std::any visitNullPredicate(
       PrestoSqlParser::NullPredicateContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitDistinctFrom(
+  virtual std::any visitDistinctFrom(
       PrestoSqlParser::DistinctFromContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitValueExpressionDefault(
+  virtual std::any visitValueExpressionDefault(
       PrestoSqlParser::ValueExpressionDefaultContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitConcatenation(
+  virtual std::any visitConcatenation(
       PrestoSqlParser::ConcatenationContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitArithmeticBinary(
+  virtual std::any visitArithmeticBinary(
       PrestoSqlParser::ArithmeticBinaryContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitArithmeticUnary(
+  virtual std::any visitArithmeticUnary(
       PrestoSqlParser::ArithmeticUnaryContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitAtTimeZone(
+  virtual std::any visitAtTimeZone(
       PrestoSqlParser::AtTimeZoneContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitDereference(
+  virtual std::any visitDereference(
       PrestoSqlParser::DereferenceContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitTypeConstructor(
+  virtual std::any visitTypeConstructor(
       PrestoSqlParser::TypeConstructorContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSpecialDateTimeFunction(
+  virtual std::any visitSpecialDateTimeFunction(
       PrestoSqlParser::SpecialDateTimeFunctionContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSubstring(
+  virtual std::any visitSubstring(
       PrestoSqlParser::SubstringContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitCast(PrestoSqlParser::CastContext* ctx) override {
+  virtual std::any visitCast(PrestoSqlParser::CastContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitLambda(
-      PrestoSqlParser::LambdaContext* ctx) override {
+  virtual std::any visitLambda(PrestoSqlParser::LambdaContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitParenthesizedExpression(
+  virtual std::any visitParenthesizedExpression(
       PrestoSqlParser::ParenthesizedExpressionContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitParameter(
+  virtual std::any visitParameter(
       PrestoSqlParser::ParameterContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitNormalize(
+  virtual std::any visitNormalize(
       PrestoSqlParser::NormalizeContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitIntervalLiteral(
+  virtual std::any visitIntervalLiteral(
       PrestoSqlParser::IntervalLiteralContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitNumericLiteral(
+  virtual std::any visitNumericLiteral(
       PrestoSqlParser::NumericLiteralContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitBooleanLiteral(
+  virtual std::any visitBooleanLiteral(
       PrestoSqlParser::BooleanLiteralContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSimpleCase(
+  virtual std::any visitSimpleCase(
       PrestoSqlParser::SimpleCaseContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitColumnReference(
+  virtual std::any visitColumnReference(
       PrestoSqlParser::ColumnReferenceContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitNullLiteral(
+  virtual std::any visitNullLiteral(
       PrestoSqlParser::NullLiteralContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitRowConstructor(
+  virtual std::any visitRowConstructor(
       PrestoSqlParser::RowConstructorContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSubscript(
+  virtual std::any visitSubscript(
       PrestoSqlParser::SubscriptContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSubqueryExpression(
+  virtual std::any visitSubqueryExpression(
       PrestoSqlParser::SubqueryExpressionContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitBinaryLiteral(
+  virtual std::any visitBinaryLiteral(
       PrestoSqlParser::BinaryLiteralContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitCurrentUser(
+  virtual std::any visitCurrentUser(
       PrestoSqlParser::CurrentUserContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitExtract(
-      PrestoSqlParser::ExtractContext* ctx) override {
+  virtual std::any visitExtract(PrestoSqlParser::ExtractContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitStringLiteral(
+  virtual std::any visitStringLiteral(
       PrestoSqlParser::StringLiteralContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitArrayConstructor(
+  virtual std::any visitArrayConstructor(
       PrestoSqlParser::ArrayConstructorContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitFunctionCall(
+  virtual std::any visitFunctionCall(
       PrestoSqlParser::FunctionCallContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitExists(
-      PrestoSqlParser::ExistsContext* ctx) override {
+  virtual std::any visitExists(PrestoSqlParser::ExistsContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitPosition(
+  virtual std::any visitPosition(
       PrestoSqlParser::PositionContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSearchedCase(
+  virtual std::any visitSearchedCase(
       PrestoSqlParser::SearchedCaseContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitGroupingOperation(
+  virtual std::any visitGroupingOperation(
       PrestoSqlParser::GroupingOperationContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitBasicStringLiteral(
+  virtual std::any visitBasicStringLiteral(
       PrestoSqlParser::BasicStringLiteralContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitUnicodeStringLiteral(
+  virtual std::any visitUnicodeStringLiteral(
       PrestoSqlParser::UnicodeStringLiteralContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitNullTreatment(
+  virtual std::any visitNullTreatment(
       PrestoSqlParser::NullTreatmentContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitTimeZoneInterval(
+  virtual std::any visitTimeZoneInterval(
       PrestoSqlParser::TimeZoneIntervalContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitTimeZoneString(
+  virtual std::any visitTimeZoneString(
       PrestoSqlParser::TimeZoneStringContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitComparisonOperator(
+  virtual std::any visitComparisonOperator(
       PrestoSqlParser::ComparisonOperatorContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitComparisonQuantifier(
+  virtual std::any visitComparisonQuantifier(
       PrestoSqlParser::ComparisonQuantifierContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitBooleanValue(
+  virtual std::any visitBooleanValue(
       PrestoSqlParser::BooleanValueContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitInterval(
+  virtual std::any visitInterval(
       PrestoSqlParser::IntervalContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitIntervalField(
+  virtual std::any visitIntervalField(
       PrestoSqlParser::IntervalFieldContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitNormalForm(
+  virtual std::any visitNormalForm(
       PrestoSqlParser::NormalFormContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitTypes(
-      PrestoSqlParser::TypesContext* ctx) override {
+  virtual std::any visitTypes(PrestoSqlParser::TypesContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitType(PrestoSqlParser::TypeContext* ctx) override {
+  virtual std::any visitType(PrestoSqlParser::TypeContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitTypeParameter(
+  virtual std::any visitTypeParameter(
       PrestoSqlParser::TypeParameterContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitBaseType(
+  virtual std::any visitBaseType(
       PrestoSqlParser::BaseTypeContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitWhenClause(
+  virtual std::any visitWhenClause(
       PrestoSqlParser::WhenClauseContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitFilter(
-      PrestoSqlParser::FilterContext* ctx) override {
+  virtual std::any visitFilter(PrestoSqlParser::FilterContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitOver(PrestoSqlParser::OverContext* ctx) override {
+  virtual std::any visitOver(PrestoSqlParser::OverContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitWindowFrame(
+  virtual std::any visitWindowFrame(
       PrestoSqlParser::WindowFrameContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitUnboundedFrame(
+  virtual std::any visitUnboundedFrame(
       PrestoSqlParser::UnboundedFrameContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitCurrentRowBound(
+  virtual std::any visitCurrentRowBound(
       PrestoSqlParser::CurrentRowBoundContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitBoundedFrame(
+  virtual std::any visitBoundedFrame(
       PrestoSqlParser::BoundedFrameContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitUpdateAssignment(
+  virtual std::any visitUpdateAssignment(
       PrestoSqlParser::UpdateAssignmentContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitExplainFormat(
+  virtual std::any visitExplainFormat(
       PrestoSqlParser::ExplainFormatContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitExplainType(
+  virtual std::any visitExplainType(
       PrestoSqlParser::ExplainTypeContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitIsolationLevel(
+  virtual std::any visitIsolationLevel(
       PrestoSqlParser::IsolationLevelContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitTransactionAccessMode(
+  virtual std::any visitTransactionAccessMode(
       PrestoSqlParser::TransactionAccessModeContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitReadUncommitted(
+  virtual std::any visitReadUncommitted(
       PrestoSqlParser::ReadUncommittedContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitReadCommitted(
+  virtual std::any visitReadCommitted(
       PrestoSqlParser::ReadCommittedContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitRepeatableRead(
+  virtual std::any visitRepeatableRead(
       PrestoSqlParser::RepeatableReadContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSerializable(
+  virtual std::any visitSerializable(
       PrestoSqlParser::SerializableContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitPositionalArgument(
+  virtual std::any visitPositionalArgument(
       PrestoSqlParser::PositionalArgumentContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitNamedArgument(
+  virtual std::any visitNamedArgument(
       PrestoSqlParser::NamedArgumentContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitPrivilege(
+  virtual std::any visitPrivilege(
       PrestoSqlParser::PrivilegeContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitQualifiedName(
+  virtual std::any visitQualifiedName(
       PrestoSqlParser::QualifiedNameContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitTableVersion(
+  virtual std::any visitTableVersion(
       PrestoSqlParser::TableVersionContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitTableversionasof(
+  virtual std::any visitTableversionasof(
       PrestoSqlParser::TableversionasofContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitTableversionbefore(
+  virtual std::any visitTableversionbefore(
       PrestoSqlParser::TableversionbeforeContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitCurrentUserGrantor(
+  virtual std::any visitCurrentUserGrantor(
       PrestoSqlParser::CurrentUserGrantorContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitCurrentRoleGrantor(
+  virtual std::any visitCurrentRoleGrantor(
       PrestoSqlParser::CurrentRoleGrantorContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitSpecifiedPrincipal(
+  virtual std::any visitSpecifiedPrincipal(
       PrestoSqlParser::SpecifiedPrincipalContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitUserPrincipal(
+  virtual std::any visitUserPrincipal(
       PrestoSqlParser::UserPrincipalContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitRolePrincipal(
+  virtual std::any visitRolePrincipal(
       PrestoSqlParser::RolePrincipalContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitUnspecifiedPrincipal(
+  virtual std::any visitUnspecifiedPrincipal(
       PrestoSqlParser::UnspecifiedPrincipalContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitRoles(
-      PrestoSqlParser::RolesContext* ctx) override {
+  virtual std::any visitRoles(PrestoSqlParser::RolesContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitUnquotedIdentifier(
+  virtual std::any visitUnquotedIdentifier(
       PrestoSqlParser::UnquotedIdentifierContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitQuotedIdentifier(
+  virtual std::any visitQuotedIdentifier(
       PrestoSqlParser::QuotedIdentifierContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitBackQuotedIdentifier(
+  virtual std::any visitBackQuotedIdentifier(
       PrestoSqlParser::BackQuotedIdentifierContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitDigitIdentifier(
+  virtual std::any visitDigitIdentifier(
       PrestoSqlParser::DigitIdentifierContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitDecimalLiteral(
+  virtual std::any visitDecimalLiteral(
       PrestoSqlParser::DecimalLiteralContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitDoubleLiteral(
+  virtual std::any visitDoubleLiteral(
       PrestoSqlParser::DoubleLiteralContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitIntegerLiteral(
+  virtual std::any visitIntegerLiteral(
       PrestoSqlParser::IntegerLiteralContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitConstraintSpecification(
+  virtual std::any visitConstraintSpecification(
       PrestoSqlParser::ConstraintSpecificationContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitNamedConstraintSpecification(
+  virtual std::any visitNamedConstraintSpecification(
       PrestoSqlParser::NamedConstraintSpecificationContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitUnnamedConstraintSpecification(
+  virtual std::any visitUnnamedConstraintSpecification(
       PrestoSqlParser::UnnamedConstraintSpecificationContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitConstraintType(
+  virtual std::any visitConstraintType(
       PrestoSqlParser::ConstraintTypeContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitConstraintQualifiers(
+  virtual std::any visitConstraintQualifiers(
       PrestoSqlParser::ConstraintQualifiersContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitConstraintQualifier(
+  virtual std::any visitConstraintQualifier(
       PrestoSqlParser::ConstraintQualifierContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitConstraintRely(
+  virtual std::any visitConstraintRely(
       PrestoSqlParser::ConstraintRelyContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitConstraintEnabled(
+  virtual std::any visitConstraintEnabled(
       PrestoSqlParser::ConstraintEnabledContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitConstraintEnforced(
+  virtual std::any visitConstraintEnforced(
       PrestoSqlParser::ConstraintEnforcedContext* ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual antlrcpp::Any visitNonReserved(
+  virtual std::any visitNonReserved(
       PrestoSqlParser::NonReservedContext* ctx) override {
     return visitChildren(ctx);
   }
