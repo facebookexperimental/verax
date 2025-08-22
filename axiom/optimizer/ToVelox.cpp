@@ -477,18 +477,23 @@ namespace {
 // related functions.
 class TempProjections {
  public:
-  TempProjections(ToVelox& tv, const RelationOp& input)
+  TempProjections(
+      ToVelox& tv,
+      const RelationOp& input,
+      bool useAllColumns = true)
       : toVelox_(tv), input_(input) {
     exprChannel_.reserve(input_.columns().size());
     names_.reserve(input_.columns().size());
     exprs_.reserve(input_.columns().size());
     fieldRefs_.reserve(input_.columns().size());
     for (const auto& column : input_.columns()) {
-      auto [it, emplaced] = exprChannel_.emplace(column, nextChannel_);
+      auto [it, emplaced] =
+          exprChannel_.emplace(column, Channel{nextChannel_, useAllColumns});
       if (!emplaced) {
         continue;
       }
       ++nextChannel_;
+      usedChannel_ += useAllColumns ? 1 : 0;
       names_.push_back(ToVelox::outputName(column));
       auto fieldRef = std::make_shared<core::FieldAccessTypedExpr>(
           toTypePtr(column->value().type), names_.back());
@@ -500,10 +505,12 @@ class TempProjections {
   core::FieldAccessTypedExprPtr toFieldRef(
       ExprCP expr,
       const std::string* optName = nullptr) {
-    auto [it, emplaced] = exprChannel_.emplace(expr, nextChannel_);
+    auto [it, emplaced] =
+        exprChannel_.emplace(expr, Channel{nextChannel_, true});
     if (emplaced) {
       VELOX_CHECK(expr->type() != PlanType::kColumnExpr);
       ++nextChannel_;
+      ++usedChannel_;
       exprs_.push_back(queryCtx()->optimization()->toTypedExpr(expr));
       names_.push_back(
           optName ? *optName : fmt::format("__r{}", nextChannel_ - 1));
@@ -511,14 +518,17 @@ class TempProjections {
           toTypePtr(expr->value().type), names_.back()));
       return fieldRefs_.back();
     }
-    auto fieldRef = fieldRefs_[it->second];
+    usedChannel_ += it->second.used ? 0 : 1;
+    it->second.used = true;
+    auto fieldRef = fieldRefs_[it->second.idx];
     if (optName && *optName != fieldRef->name()) {
       auto aliasFieldRef = std::make_shared<core::FieldAccessTypedExpr>(
           toTypePtr(expr->value().type), *optName);
       names_.push_back(*optName);
       exprs_.push_back(fieldRef);
       fieldRefs_.push_back(aliasFieldRef);
-      exprChannel_[expr] = nextChannel_++;
+      exprChannel_[expr] = {nextChannel_++, true};
+      ++usedChannel_;
       return aliasFieldRef;
     }
     return fieldRef;
@@ -538,8 +548,27 @@ class TempProjections {
   }
 
   core::PlanNodePtr maybeProject(core::PlanNodePtr inputNode) && {
-    if (nextChannel_ == input_.columns().size()) {
+    if (usedChannel_ == nextChannel_ &&
+        nextChannel_ == input_.columns().size()) {
       return inputNode;
+    }
+    VELOX_DCHECK_LE(usedChannel_, nextChannel_);
+    const auto notNeededChannels = nextChannel_ - usedChannel_;
+    if (notNeededChannels != 0) {
+      std::unordered_set<uint32_t> unusedChannels;
+      unusedChannels.reserve(notNeededChannels);
+      for (const auto& expr : exprChannel_) {
+        if (!expr.second.used) {
+          unusedChannels.emplace(expr.second.idx);
+        }
+      }
+      VELOX_DCHECK_EQ(notNeededChannels, unusedChannels.size());
+      std::erase_if(names_, [&, i = uint32_t{0}](const auto&) mutable {
+        return unusedChannels.contains(i++);
+      });
+      std::erase_if(exprs_, [&, i = uint32_t{0}](const auto&) mutable {
+        return unusedChannels.contains(i++);
+      });
     }
 
     return std::make_shared<core::ProjectNode>(
@@ -549,11 +578,16 @@ class TempProjections {
  private:
   ToVelox& toVelox_;
   const RelationOp& input_;
+  uint32_t usedChannel_{0};
   uint32_t nextChannel_{0};
   std::vector<core::FieldAccessTypedExprPtr> fieldRefs_;
   std::vector<std::string> names_;
   std::vector<core::TypedExprPtr> exprs_;
-  std::unordered_map<ExprCP, uint32_t> exprChannel_;
+  struct Channel {
+    uint32_t idx = 0;
+    bool used = false;
+  };
+  std::unordered_map<ExprCP, Channel> exprChannel_;
 };
 } // namespace
 
@@ -1208,10 +1242,12 @@ core::PlanNodePtr ToVelox::makeUnnest(
     std::vector<ExecutableFragment>& stages) {
   auto input = makeFragment(op.input(), fragment, stages);
 
-  TempProjections projections{*this, *op.input()};
+  // We avoid use all of the input columns in the projections
+  // because the unnest op explicitly specify what columns to replicate
+  TempProjections projections{*this, *op.input(), false};
   auto replicateVariables = projections.toFieldRefs(op.replicateColumns);
   auto unnestVariables = projections.toFieldRefs(op.unnestExprs);
-  auto project = projections.maybeProject(std::move(input));
+  auto project = std::move(projections).maybeProject(std::move(input));
 
   std::vector<std::string> unnestNames;
   unnestNames.reserve(op.unnestedColumns.size());
