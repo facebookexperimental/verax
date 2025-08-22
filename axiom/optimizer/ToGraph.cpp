@@ -1609,7 +1609,6 @@ PlanObjectP ToGraph::makeQueryGraph(
         return wrapInDt(node);
       }
 
-      // TODO: we don't restrict to "single" here.
       // A single groupBy is allowed before a limit. If arrives after orderBy,
       // then orderBy is dropped. If arrives after limit, then starts a new DT.
 
