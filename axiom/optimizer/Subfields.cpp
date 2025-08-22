@@ -78,6 +78,36 @@ void ToGraph::markFieldAccessed(
 }
 
 void ToGraph::markFieldAccessed(
+    const lp::UnnestNode& unnest,
+    int32_t ordinal,
+    std::vector<Step>& steps,
+    bool isControl,
+    std::span<const RowType* const> context,
+    std::span<const LogicalContextSource> sources) {
+  const auto& input = unnest.onlyInput();
+  if (ordinal < input->outputType()->size()) {
+    markFieldAccessed(
+        {.planNode = input.get()}, ordinal, steps, isControl, context, sources);
+    return;
+  }
+  ordinal -= input->outputType()->size();
+  for (size_t i = 0; const auto& name : unnest.unnestedNames()) {
+    if (ordinal < name.size()) {
+      markSubfields(
+          unnest.unnestExpressions()[i],
+          steps,
+          isControl,
+          std::array{input->outputType().get()},
+          std::array{LogicalContextSource{.planNode = input.get()}});
+      return;
+    }
+    ordinal -= name.size();
+    ++i;
+  }
+  VELOX_UNREACHABLE("Unnest node does not have field {}", ordinal);
+}
+
+void ToGraph::markFieldAccessed(
     const lp::AggregateNode& agg,
     int32_t ordinal,
     std::vector<Step>& steps,
@@ -156,6 +186,12 @@ void ToGraph::markFieldAccessed(
   if (kind == lp::NodeKind::kProject) {
     const auto* project = source.planNode->asUnchecked<lp::ProjectNode>();
     markFieldAccessed(*project, ordinal, steps, isControl);
+    return;
+  }
+
+  if (kind == lp::NodeKind::kUnnest) {
+    const auto* unnest = source.planNode->asUnchecked<lp::UnnestNode>();
+    markFieldAccessed(*unnest, ordinal, steps, isControl, context, sources);
     return;
   }
 
