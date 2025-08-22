@@ -404,9 +404,11 @@ using HashBuildCP = const HashBuild*;
 struct Unnest : public RelationOp {
   Unnest(
       RelationOpPtr input,
+      ExprVector replicateExprs,
       ExprVector unnestExprs,
       ColumnVector unnestedColumns);
 
+  ExprVector replicateExprs;
   ExprVector unnestExprs;
 
   std::string toString(bool recursive, bool detail) const override;
