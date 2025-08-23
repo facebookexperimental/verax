@@ -1342,11 +1342,12 @@ TEST_F(PlanTest, unnest) {
   }
   // project after unnest
   {
-    auto logicalPlanUnnest = lp::PlanBuilder{}
-                                 .values({rowVector})
-                                 .unnest({"regions"}, {{"region"}})
-                                 .project({"nation", "region"})
-                                 .build();
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}
+            .values({rowVector})
+            .unnest({lp::Col("regions").unnestAs("region")})
+            .project({"nation", "region"})
+            .build();
 
     auto referencePlanUnnest = exec::test::PlanBuilder{}
                                    .values({rowVector})
@@ -1358,12 +1359,13 @@ TEST_F(PlanTest, unnest) {
   }
   // group by before unnest, project after unnest
   {
-    auto logicalPlanUnnest = lp::PlanBuilder{}
-                                 .values({rowVector})
-                                 .aggregate(names, {})
-                                 .unnest({"regions"}, {{"region"}})
-                                 .project({"nation", "region"})
-                                 .build();
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}
+            .values({rowVector})
+            .aggregate(names, {})
+            .unnest({lp::Col("regions").unnestAs("region")})
+            .project({"nation", "region"})
+            .build();
 
     auto referencePlanUnnest = exec::test::PlanBuilder{}
                                    .values({rowVector})
@@ -1376,12 +1378,13 @@ TEST_F(PlanTest, unnest) {
   }
   // order by before unnest, project after unnest
   {
-    auto logicalPlanUnnest = lp::PlanBuilder{}
-                                 .values({rowVector})
-                                 .orderBy(names)
-                                 .unnest({"regions"}, {{"region"}})
-                                 .project({"nation", "region"})
-                                 .build();
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}
+            .values({rowVector})
+            .orderBy(names)
+            .unnest({lp::Col("regions").unnestAs("region")})
+            .project({"nation", "region"})
+            .build();
 
     auto referencePlanUnnest = exec::test::PlanBuilder{}
                                    .values({rowVector})
@@ -1394,12 +1397,13 @@ TEST_F(PlanTest, unnest) {
   }
   // limit before unnest, project after unnest
   {
-    auto logicalPlanUnnest = lp::PlanBuilder{}
-                                 .values({rowVector})
-                                 .limit(1, 1)
-                                 .unnest({"regions"}, {{"region"}})
-                                 .project({"nation", "region"})
-                                 .build();
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}
+            .values({rowVector})
+            .limit(1, 1)
+            .unnest({lp::Col("regions").unnestAs("region")})
+            .project({"nation", "region"})
+            .build();
 
     auto referencePlanUnnest = exec::test::PlanBuilder{}
                                    .values({rowVector})
@@ -1415,7 +1419,8 @@ TEST_F(PlanTest, unnest) {
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
-            .unnest({"array_distinct(regions)"}, {{"region"}})
+            .unnest({lp::Call("array_distinct", lp::Col("regions"))
+                         .unnestAs("region")})
             .project({"nation", "region"})
             .build();
 
@@ -1434,9 +1439,11 @@ TEST_F(PlanTest, unnest) {
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
-            .unnest({"array_distinct(regions) AS distinct_regions"})
-            .unnest({"array_distinct(distinct_regions_e) AS distinct_region"})
-            .project({"nation", "distinct_region_e AS region"})
+            .unnest({lp::Call("array_distinct", lp::Col("regions"))
+                         .unnestAs("distinct_regions")})
+            .unnest({lp::Call("array_distinct", lp::Col("distinct_regions"))
+                         .unnestAs("region")})
+            .project({"nation", "region"})
             .build();
 
     auto referencePlanUnnest =
@@ -1463,12 +1470,14 @@ TEST_F(PlanTest, unnest) {
               .values()
               .project({"nation", "array_distinct(regions)"})
               .unnest({"nation"}, {"__r2"})
-              .project({"nation", "array_distinct(distinct_regions_e_0)"})
+              .project({"nation", "array_distinct(distinct_regions)"})
               .unnest({"nation"}, {"__r2"})
-              .project({"nation", "distinct_region_e_1"})
               .build();
 
       ASSERT_TRUE(matcher->match(plan));
+
+      std::vector<std::string> expectedNames{"nation", "region"};
+      ASSERT_EQ(plan->outputType()->names(), expectedNames);
     }
   }
 }
