@@ -90,8 +90,5 @@ jobs:
       # Run Verax tests (excluding velox tests)
       - name: Run Debug Tests
         working-directory: _build/debug
-        env:
-          # TODO: Fix failing tests and remove them from the GTEST_FILTER exclusion list: https://github.com/facebookexperimental/verax/issues/204
-          GTEST_FILTER: "-HiveQueriesTest.basic:PlanTest.filterImport:PlanTest.intersect:PlanTest.except"
         run: |
           ctest -j 8 --output-on-failure --no-tests=error

@@ -24,7 +24,16 @@ namespace lp = facebook::velox::logical_plan;
 namespace facebook::velox::optimizer {
 namespace {
 
-class HiveQueriesTest : public test::HiveQueriesTestBase {};
+class HiveQueriesTest : public test::HiveQueriesTestBase {
+ public:
+  static void SetUpTestCase() {
+    test::HiveQueriesTestBase::SetUpTestCase();
+  }
+
+  static void TearDownTestCase() {
+    test::HiveQueriesTestBase::TearDownTestCase();
+  }
+};
 
 TEST_F(HiveQueriesTest, basic) {
   auto planNodeIdGenerator = std::make_shared<core::PlanNodeIdGenerator>();

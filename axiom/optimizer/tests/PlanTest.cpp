@@ -36,15 +36,26 @@ class PlanTest : public test::QueryTestBase {
   static constexpr auto kTestConnectorId = "test";
 
   static void SetUpTestCase() {
-    test::ParquetTpchTest::createTables();
+    std::string path;
+    if (FLAGS_data_path.empty()) {
+      tempDirectory_ = exec::test::TempDirectoryPath::create();
+      path = tempDirectory_->getPath();
+      test::ParquetTpchTest::createTables(path);
+    } else {
+      path = FLAGS_data_path;
+      if (FLAGS_create_dataset) {
+        test::ParquetTpchTest::createTables(path);
+      }
+    }
 
-    LocalRunnerTestBase::testDataPath_ = FLAGS_data_path;
+    LocalRunnerTestBase::testDataPath_ = path;
     LocalRunnerTestBase::localFileFormat_ = "parquet";
     LocalRunnerTestBase::SetUpTestCase();
   }
 
   static void TearDownTestCase() {
     LocalRunnerTestBase::TearDownTestCase();
+    tempDirectory_.reset();
   }
 
   void SetUp() override {
@@ -94,8 +105,14 @@ class PlanTest : public test::QueryTestBase {
     return plan->fragments().at(0).fragment.planNode;
   }
 
+  static std::shared_ptr<exec::test::TempDirectoryPath> tempDirectory_;
+
   std::shared_ptr<connector::TestConnector> testConnector_;
 };
+
+// static
+std::shared_ptr<exec::test::TempDirectoryPath> PlanTest::tempDirectory_ =
+    nullptr;
 
 auto gte(const std::string& name, int64_t n) {
   return common::test::singleSubfieldFilter(name, exec::greaterThanOrEqual(n));
@@ -592,7 +609,7 @@ TEST_F(PlanTest, filterBreakup) {
 
   auto referenceBuilder = std::make_unique<exec::test::TpchQueryBuilder>(
       dwio::common::FileFormat::PARQUET);
-  referenceBuilder->initialize(FLAGS_data_path);
+  referenceBuilder->initialize(LocalRunnerTestBase::testDataPath_);
 
   auto referencePlan = referenceBuilder->getQueryPlan(19).plan;
 

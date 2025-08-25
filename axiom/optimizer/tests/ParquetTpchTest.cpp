@@ -36,9 +36,11 @@ using namespace facebook::velox::exec::test;
 namespace facebook::velox::optimizer::test {
 
 namespace {
-void doCreateTables(const std::string& path) {
+void doCreateTables(std::string_view path) {
   auto rootPool = memory::memoryManager()->addRootPool();
   auto pool = rootPool->addLeafChild("leaf");
+
+  LOG(INFO) << "Creating TPC-H tables in " << path;
 
   for (const auto& table : tpch::tables) {
     const auto tableName = tpch::toTableName(table);
@@ -91,22 +93,9 @@ void registerHiveConnector(const std::string& id) {
 
 } // namespace
 
-std::shared_ptr<TempDirectoryPath> ParquetTpchTest::tempDirectory_;
-
 //  static
-void ParquetTpchTest::createTables() {
+void ParquetTpchTest::createTables(std::string_view path) {
   memory::MemoryManager::testingSetInstance(memory::MemoryManagerOptions{});
-
-  std::string createPath;
-  if (FLAGS_data_path.empty()) {
-    tempDirectory_ = TempDirectoryPath::create();
-    createPath = tempDirectory_->getPath();
-    FLAGS_data_path = createPath;
-  } else if (FLAGS_create_dataset) {
-    createPath = FLAGS_data_path;
-  } else {
-    return;
-  }
 
   SCOPE_EXIT {
     connector::unregisterConnector(
@@ -132,7 +121,7 @@ void ParquetTpchTest::createTables() {
 
   registerTpchConnector(std::string(PlanBuilder::kTpchDefaultConnectorId));
 
-  doCreateTables(createPath);
+  doCreateTables(path);
 }
 
 // static

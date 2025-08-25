@@ -22,10 +22,15 @@ namespace lp = facebook::velox::logical_plan;
 namespace facebook::velox::optimizer::test {
 
 // static
-void HiveQueriesTestBase::SetUpTestCase() {
-  test::ParquetTpchTest::createTables();
+std::shared_ptr<exec::test::TempDirectoryPath>
+    HiveQueriesTestBase::tempDirectory_ = nullptr;
 
-  LocalRunnerTestBase::testDataPath_ = FLAGS_data_path;
+// static
+void HiveQueriesTestBase::SetUpTestCase() {
+  tempDirectory_ = exec::test::TempDirectoryPath::create();
+  test::ParquetTpchTest::createTables(tempDirectory_->getPath());
+
+  LocalRunnerTestBase::testDataPath_ = tempDirectory_->getPath();
   LocalRunnerTestBase::localFileFormat_ = "parquet";
   LocalRunnerTestBase::SetUpTestCase();
 }
@@ -33,6 +38,7 @@ void HiveQueriesTestBase::SetUpTestCase() {
 // static
 void HiveQueriesTestBase::TearDownTestCase() {
   LocalRunnerTestBase::TearDownTestCase();
+  tempDirectory_.reset();
 }
 
 namespace {

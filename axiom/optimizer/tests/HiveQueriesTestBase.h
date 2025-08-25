@@ -60,6 +60,8 @@ class HiveQueriesTestBase : public test::QueryTestBase {
   }
 
  protected:
+  static std::shared_ptr<exec::test::TempDirectoryPath> tempDirectory_;
+
   std::unique_ptr<DuckParser> duckParser_;
   std::unique_ptr<PrestoParser> prestoParser_;
 };
