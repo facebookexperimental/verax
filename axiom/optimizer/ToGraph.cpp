@@ -240,7 +240,8 @@ void ToGraph::getExprForField(
       const auto* relation = resultColumn->relation();
       VELOX_CHECK_NOT_NULL(relation);
       if (relation->is(PlanType::kTableNode) ||
-          relation->is(PlanType::kValuesTableNode)) {
+          relation->is(PlanType::kValuesTableNode) ||
+          relation->is(PlanType::kUnnestTableNode)) {
         VELOX_CHECK(leaf == relation);
       }
       return;
@@ -852,7 +853,10 @@ void ToGraph::translateUnnest(const lp::UnnestNode& unnest) {
     maxCardinality = std::max(maxCardinality, unnestExpr->value().cardinality);
   }
 
-  ColumnVector unnestedColumns;
+  auto* unnestTable = make<UnnestTable>();
+  unnestTable->cname = newCName("ut");
+  unnestTable->columns.reserve(
+      unnest.outputType()->size() - unnest.onlyInput()->outputType()->size());
   for (size_t i = 0; const auto& unnestedNames : unnest.unnestedNames()) {
     const auto* unnestExpr = unnestExprs[i++];
     for (size_t j = 0; const auto& unnestedName : unnestedNames) {
@@ -862,13 +866,22 @@ void ToGraph::translateUnnest(const lp::UnnestNode& unnest) {
       // Other Value properties also should be computed.
       Value value{unnestedType, maxCardinality};
       const auto* columnName = toName(unnestedName);
-      auto* column = make<Column>(columnName, currentDt_, value, columnName);
-      unnestedColumns.push_back(column);
+      auto* column = make<Column>(columnName, unnestTable, value, columnName);
+      unnestTable->columns.push_back(column);
       renames_[columnName] = column;
     }
   }
-  currentDt_->unnests.emplace_back(
-      make<UnnestPlan>(std::move(unnestExprs), std::move(unnestedColumns)));
+
+  auto* edge = make<JoinEdge>(
+      leftTable,
+      unnestTable,
+      JoinEdge::Spec{.filter = std::move(unnestExprs), .directed = true});
+  edge->setFanouts(1, 1);
+
+  planLeaves_[&unnest] = unnestTable;
+  currentDt_->tables.push_back(unnestTable);
+  currentDt_->tableSet.add(unnestTable);
+  currentDt_->joins.push_back(edge);
 }
 
 AggregationPlanCP ToGraph::translateAggregation(
@@ -1652,7 +1665,10 @@ PlanObjectP ToGraph::makeQueryGraph(
     }
 
     case lp::NodeKind::kUnnest: {
-      if (!contains(allowedInDt, PlanType::kUnnestNode)) {
+      // TODO: Unnest cannot be in single DT with Join right now.
+      // You can replace kUnnestTableNode here with kJoinNode to allow it and
+      // run tests to investigate failures.
+      if (!contains(allowedInDt, PlanType::kUnnestTableNode)) {
         return wrapInDt(node);
       }
 
