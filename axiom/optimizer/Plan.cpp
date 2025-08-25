@@ -162,12 +162,6 @@ const PlanObjectSet& PlanState::downstreamColumns() const {
     }
   }
 
-  for (const auto* unnest : dt->unnests) {
-    if (!placed.contains(unnest)) {
-      result.unionColumns(unnest->unnestExprs());
-    }
-  }
-
   if (dt->aggregation && !placed.contains(dt->aggregation)) {
     auto aggToPlace = dt->aggregation;
     const auto numGroupingKeys = aggToPlace->groupingKeys().size();
@@ -312,6 +306,10 @@ const JoinEdgeVector& joinedBy(PlanObjectCP table) {
 
   if (table->is(PlanType::kValuesTableNode)) {
     return table->as<ValuesTable>()->joinedBy;
+  }
+
+  if (table->is(PlanType::kUnnestTableNode)) {
+    return table->as<UnnestTable>()->joinedBy;
   }
 
   VELOX_DCHECK(table->is(PlanType::kDerivedTableNode));
