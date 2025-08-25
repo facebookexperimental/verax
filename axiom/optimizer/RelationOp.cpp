@@ -322,7 +322,7 @@ Join::Join(
     RelationOpPtr input,
     RelationOpPtr _right,
     ExprVector _leftKeys,
-    ExprVector rightKeys,
+    ExprVector _rightKeys,
     ExprVector filter,
     float fanout,
     ColumnVector columns)
@@ -335,10 +335,14 @@ Join::Join(
       joinType(_joinType),
       right(std::move(_right)),
       leftKeys(std::move(_leftKeys)),
-      rightKeys(std::move(rightKeys)),
+      rightKeys(std::move(_rightKeys)),
       filter(std::move(filter)) {
   cost_.inputCardinality = inputCardinality();
   cost_.fanout = fanout;
+
+  if (method == JoinMethod::kCross) {
+    return;
+  }
 
   float buildSize = right->cost().inputCardinality;
   auto rowCost =
@@ -414,8 +418,21 @@ std::string Join::toString(bool recursive, bool detail) const {
   if (recursive) {
     out << input()->toString(true, detail);
   }
-  out << "*" << (method == JoinMethod::kHash ? "H" : "M") << " "
-      << joinTypeLabel(joinType);
+  out << "*";
+  
+  switch (method) {
+    case JoinMethod::kHash:
+      out << "H";
+      break;
+    case JoinMethod::kMerge:
+      out << "M";
+      break;
+    case JoinMethod::kCross:
+      out << "C";
+      break;
+  }
+  
+  out << " " << joinTypeLabel(joinType);
   printCost(detail, out);
   if (detail) {
     out << "columns: " << itemsToString(columns().data(), columns().size())
