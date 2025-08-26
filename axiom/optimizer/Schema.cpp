@@ -17,9 +17,8 @@
 #include "axiom/optimizer/Schema.h"
 #include "axiom/optimizer/Cost.h"
 #include "axiom/optimizer/DerivedTable.h"
-#include "axiom/optimizer/Plan.h"
+#include "axiom/optimizer/Optimization.h"
 #include "axiom/optimizer/PlanUtils.h"
-#include "axiom/optimizer/RelationOp.h"
 
 namespace facebook::velox::optimizer {
 
