@@ -23,7 +23,7 @@ Optimization::Optimization(
     const logical_plan::LogicalPlanNode& plan,
     const Schema& schema,
     History& history,
-    std::shared_ptr<core::QueryCtx> _queryCtx,
+    std::shared_ptr<core::QueryCtx> veloxQueryCtx,
     velox::core::ExpressionEvaluator& evaluator,
     OptimizerOptions options,
     axiom::runner::MultiFragmentPlan::Options runnerOptions)
@@ -32,7 +32,7 @@ Optimization::Optimization(
       isSingleWorker_(runnerOptions_.numWorkers == 1),
       logicalPlan_(&plan),
       history_(history),
-      queryCtx_(std::move(_queryCtx)),
+      veloxQueryCtx_(std::move(veloxQueryCtx)),
       toGraph_{schema, evaluator, options_},
       toVelox_{runnerOptions_, options_} {
   queryCtx()->optimization() = this;
