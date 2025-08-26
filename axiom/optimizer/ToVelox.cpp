@@ -15,7 +15,7 @@
  */
 
 #include "axiom/optimizer/ToVelox.h"
-#include "axiom/optimizer/Plan.h"
+#include "axiom/optimizer/Optimization.h"
 #include "velox/core/PlanNode.h"
 #include "velox/exec/HashPartitionFunction.h"
 #include "velox/exec/RoundRobinPartitionFunction.h"
