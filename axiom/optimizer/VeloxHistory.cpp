@@ -15,6 +15,7 @@
  */
 
 #include "axiom/optimizer/VeloxHistory.h"
+#include "axiom/optimizer/Optimization.h"
 #include "axiom/optimizer/Plan.h"
 
 #include <iostream>

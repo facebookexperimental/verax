@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "axiom/optimizer/DerivedTable.h"
+#include "axiom/optimizer/Optimization.h"
 #include "axiom/optimizer/Plan.h"
 #include "axiom/optimizer/PlanUtils.h"
 
@@ -21,7 +22,7 @@ namespace facebook::velox::optimizer {
 namespace lp = facebook::velox::logical_plan;
 
 namespace {
-/// If 'object' is an Expr, returns Expr::singleTable, else nullptr.
+// If 'object' is an Expr, returns Expr::singleTable, else nullptr.
 PlanObjectCP singleTable(PlanObjectCP object) {
   if (isExprType(object->type())) {
     return object->as<Expr>()->singleTable();
