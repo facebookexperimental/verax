@@ -155,7 +155,7 @@ class Column : public Expr {
  public:
   Column(
       Name name,
-      PlanObjectP relation,
+      PlanObjectCP relation,
       const Value& value,
       Name alias = nullptr,
       Name nameInTable = nullptr,
@@ -185,7 +185,7 @@ class Column : public Expr {
 
   std::string toString() const override;
 
-  struct Equivalence* equivalence() const {
+  EquivalenceP equivalence() const {
     return equivalence_;
   }
 
@@ -202,7 +202,7 @@ class Column : public Expr {
   Name name_;
 
   // The defining BaseTable or DerivedTable.
-  PlanObjectP relation_;
+  PlanObjectCP relation_;
 
   // Optional alias copied from the the logical plan.
   Name alias_;
@@ -545,9 +545,9 @@ class JoinEdge {
         markColumn_(spec.markColumn),
         directed_(spec.directed) {
     VELOX_CHECK_NOT_NULL(rightTable);
-    if (isInner()) {
-      VELOX_CHECK(filter_.empty());
-    }
+    // Unnest is inner and direct. It's store unnest expressions in filter_.
+    // Otherwise, filter_ is only for non-inner joins.
+    VELOX_CHECK(directed_ || filter_.empty() || !isInner());
   }
 
   static JoinEdge* makeInner(PlanObjectCP leftTable, PlanObjectCP rightTable) {
@@ -813,6 +813,32 @@ struct ValuesTable : public PlanObject {
 
   float cardinality() const {
     return values.cardinality();
+  }
+
+  bool isTable() const override {
+    return true;
+  }
+
+  void addJoinedBy(JoinEdgeP join);
+
+  std::string toString() const override;
+};
+
+struct UnnestTable : public PlanObject {
+  explicit UnnestTable() : PlanObject{PlanType::kUnnestTableNode} {}
+
+  // Correlation name, distinguishes between uses of the same values node.
+  Name cname{nullptr};
+
+  /// All columns from this 'UnnestTable'.
+  ColumnVector columns;
+
+  // All joins where 'this' is an end point.
+  JoinEdgeVector joinedBy;
+
+  float cardinality() const {
+    // TODO: Should be changed later to actual cardinality
+    return 1;
   }
 
   bool isTable() const override {

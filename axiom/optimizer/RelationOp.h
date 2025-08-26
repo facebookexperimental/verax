@@ -361,6 +361,20 @@ struct HashBuild : public RelationOp {
 
 using HashBuildCP = const HashBuild*;
 
+struct Unnest : public RelationOp {
+  Unnest(
+      RelationOpPtr input,
+      ColumnVector replicateColumns,
+      ExprVector unnestExprs,
+      ColumnVector unnestedColumns);
+
+  ColumnVector replicateColumns;
+  ExprVector unnestExprs;
+  ColumnVector unnestedColumns;
+
+  std::string toString(bool recursive, bool detail) const override;
+};
+
 /// Represents aggregation with or without grouping.
 struct Aggregation : public RelationOp {
   Aggregation(

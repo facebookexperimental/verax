@@ -27,6 +27,11 @@
 #include "velox/vector/VariantToVector.h"
 
 namespace facebook::velox::logical_plan {
+namespace {
+
+const std::string kDefaultExprName = "expr";
+
+}
 
 PlanBuilder& PlanBuilder::values(
     const RowTypePtr& rowType,
@@ -263,19 +268,17 @@ void PlanBuilder::resolveProjections(
       outputNames.push_back(newName(alias.value()));
       mappings.add(alias.value(), outputNames.back());
     } else {
-      outputNames.push_back(newName("expr"));
+      outputNames.push_back(newName(kDefaultExprName));
     }
 
     exprs.push_back(expr);
   }
 }
 
-PlanBuilder& PlanBuilder::project(const std::vector<std::string>& projections) {
-  return project(parse(projections));
-}
-
 PlanBuilder& PlanBuilder::project(const std::vector<ExprApi>& projections) {
-  VELOX_USER_CHECK_NOT_NULL(node_, "Project node cannot be a leaf node");
+  if (!node_) {
+    values(ROW({}), std::vector<Variant>{Variant::row({})});
+  }
 
   std::vector<std::string> outputNames;
   outputNames.reserve(projections.size());
@@ -294,7 +297,9 @@ PlanBuilder& PlanBuilder::project(const std::vector<ExprApi>& projections) {
 }
 
 PlanBuilder& PlanBuilder::with(const std::vector<ExprApi>& projections) {
-  VELOX_USER_CHECK_NOT_NULL(node_, "Project node cannot be a leaf node");
+  if (!node_) {
+    values(ROW({}), std::vector<Variant>{Variant::row({})});
+  }
 
   std::vector<std::string> outputNames;
   outputNames.reserve(projections.size());
@@ -380,24 +385,14 @@ PlanBuilder& PlanBuilder::aggregate(
 }
 
 PlanBuilder& PlanBuilder::unnest(
-    const std::vector<std::string>& unnestExprs,
-    bool withOrdinality) {
-  return unnest(parse(unnestExprs), withOrdinality);
-}
-
-PlanBuilder& PlanBuilder::unnest(
-    const std::vector<ExprApi>& unnestExprs,
-    bool withOrdinality) {
-  return unnest(unnestExprs, withOrdinality, std::nullopt, {});
-}
-
-PlanBuilder& PlanBuilder::unnest(
     const std::vector<ExprApi>& unnestExprs,
     bool withOrdinality,
     const std::optional<std::string>& alias,
     const std::vector<std::string>& unnestAliases) {
-  auto newOutputMapping =
-      node_ != nullptr ? outputMapping_ : std::make_shared<NameMappings>();
+  if (!node_) {
+    values(ROW({}), std::vector<Variant>{Variant::row({})});
+  }
+  auto newOutputMapping = outputMapping_;
 
   size_t index = 0;
 

@@ -1165,6 +1165,273 @@ TEST_F(PlanTest, values) {
     checkSame(logicalPlan, referencePlan);
   }
 }
+
+TEST_F(PlanTest, unnest) {
+  const std::vector<std::string> names{"nation", "regions"};
+
+  auto rowVector = makeRowVector(
+      names,
+      {
+          makeFlatVector<int64_t>({
+              7,
+              10,
+              8,
+              9,
+          }),
+          makeNestedArrayVectorFromJson<int64_t>({
+              "[[10, 20, 30], [100, 200, 300]]",
+              "[[1, 3, 2], [1, 3, 2]]",
+              "[[100, 200, 300], [10, 20, 30]]",
+              "[[0, 0, 0], [0, 0, 0]]",
+          }),
+      });
+
+  // just unnest
+  {
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}.values({rowVector}).unnest({"regions"}).build();
+
+    auto referencePlanUnnest = exec::test::PlanBuilder{}
+                                   .values({rowVector})
+                                   .unnest({"nation", "regions"}, {"regions"})
+                                   .planNode();
+
+    checkSame(logicalPlanUnnest, referencePlanUnnest);
+  }
+  // project after unnest
+  {
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}
+            .values({rowVector})
+            .unnest({lp::Col("regions").unnestAs("region")})
+            .project({"nation", "region"})
+            .build();
+
+    auto referencePlanUnnest = exec::test::PlanBuilder{}
+                                   .values({rowVector})
+                                   .unnest({"nation"}, {"regions"})
+                                   .project({"nation", "regions_e AS region"})
+                                   .planNode();
+
+    checkSame(logicalPlanUnnest, referencePlanUnnest);
+  }
+  // group by before unnest, project after unnest
+  {
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}
+            .values({rowVector})
+            .aggregate(names, {})
+            .unnest({lp::Col("regions").unnestAs("region")})
+            .project({"nation", "region"})
+            .build();
+
+    auto referencePlanUnnest = exec::test::PlanBuilder{}
+                                   .values({rowVector})
+                                   .aggregation(names, {}, {}, {}, {})
+                                   .unnest({"nation"}, {"regions"})
+                                   .project({"nation", "regions_e AS region"})
+                                   .planNode();
+
+    checkSame(logicalPlanUnnest, referencePlanUnnest);
+  }
+  // order by before unnest, project after unnest
+  {
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}
+            .values({rowVector})
+            .orderBy(names)
+            .unnest({lp::Col("regions").unnestAs("region")})
+            .project({"nation", "region"})
+            .build();
+
+    auto referencePlanUnnest = exec::test::PlanBuilder{}
+                                   .values({rowVector})
+                                   .orderBy(names, {})
+                                   .unnest({"nation"}, {"regions"})
+                                   .project({"nation", "regions_e AS region"})
+                                   .planNode();
+
+    checkSame(logicalPlanUnnest, referencePlanUnnest);
+  }
+  // limit before unnest, project after unnest
+  {
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}
+            .values({rowVector})
+            .limit(1, 1)
+            .unnest({lp::Col("regions").unnestAs("region")})
+            .project({"nation", "region"})
+            .build();
+
+    auto referencePlanUnnest = exec::test::PlanBuilder{}
+                                   .values({rowVector})
+                                   .limit(1, 1, {})
+                                   .unnest({"nation"}, {"regions"})
+                                   .project({"nation", "regions_e AS region"})
+                                   .planNode();
+
+    checkSame(logicalPlanUnnest, referencePlanUnnest);
+  }
+  // expression inside unnest
+  {
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}
+            .values({rowVector})
+            .unnest({lp::Call("array_distinct", lp::Col("regions"))
+                         .unnestAs("region")})
+            .project({"nation", "region"})
+            .build();
+
+    auto referencePlanUnnest =
+        exec::test::PlanBuilder{}
+            .values({rowVector})
+            .project({"nation", "array_distinct(regions) AS regions"})
+            .unnest({"nation"}, {"regions"})
+            .project({"nation", "regions_e AS region"})
+            .planNode();
+
+    checkSame(logicalPlanUnnest, referencePlanUnnest);
+  }
+  // multiple unnests
+  {
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}
+            .values({rowVector})
+            .unnest({lp::Call("array_distinct", lp::Col("regions"))
+                         .unnestAs("distinct_regions")})
+            .unnest({lp::Call("array_distinct", lp::Col("distinct_regions"))
+                         .unnestAs("region")})
+            .project({"nation", "region"})
+            .build();
+
+    auto referencePlanUnnest =
+        exec::test::PlanBuilder{}
+            .values({rowVector})
+            .project({"nation", "array_distinct(regions) AS distinct_regions"})
+            .unnest({"nation"}, {"distinct_regions"})
+            .project(
+                {"nation",
+                 "array_distinct(distinct_regions_e) AS distinct_region"})
+            .unnest({"nation"}, {"distinct_region"})
+            .project({"nation", "distinct_region_e AS region"})
+            .planNode();
+
+    checkSame(logicalPlanUnnest, referencePlanUnnest);
+
+    // check that only needed columns are projected and replicated
+    // names like this because they're autogenerated by the optimizer
+    {
+      auto plan = toSingleNodePlan(logicalPlanUnnest);
+
+      auto matcher =
+          core::PlanMatcherBuilder()
+              .values()
+              .project({"nation", "array_distinct(regions)"})
+              .unnest({"nation"}, {"__r2"})
+              .project({"nation", "array_distinct(distinct_regions)"})
+              .unnest({"nation"}, {"__r2"})
+              .build();
+
+      ASSERT_TRUE(matcher->match(plan));
+
+      std::vector<std::string> expectedNames{"nation", "region"};
+      ASSERT_EQ(plan->outputType()->names(), expectedNames);
+    }
+  }
+  // allow push down joins that don't depend on unnest
+  {
+    lp::PlanBuilder::Context ctx;
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{ctx}
+            .values({rowVector})
+            .unnest({lp::Call("array_distinct", lp::Col("regions"))
+                         .unnestAs("distinct_regions")})
+            .unnest({lp::Call("array_distinct", lp::Col("distinct_regions"))
+                         .unnestAs("region")})
+            .project({"nation AS nation1", "region AS region1"})
+            .join(
+                lp::PlanBuilder{ctx}
+                    .values({rowVector})
+                    .unnest({lp::Call("array_distinct", lp::Col("regions"))
+                                 .unnestAs("distinct_regions")})
+                    .unnest(
+                        {lp::Call("array_distinct", lp::Col("distinct_regions"))
+                             .unnestAs("region")})
+                    .project({"nation AS nation2", "region AS region2"}),
+                "nation1 = nation2",
+                lp::JoinType::kInner)
+            .build();
+    auto plan = toSingleNodePlan(logicalPlanUnnest);
+
+    auto matcher = core::PlanMatcherBuilder{}
+                       .values()
+                       .project()
+                       .unnest()
+                       .project()
+                       .unnest()
+                       .hashJoin(core::PlanMatcherBuilder{}
+                                     .values()
+                                     .project()
+                                     .unnest()
+                                     .project()
+                                     .unnest()
+                                     .build())
+                       .project()
+                       .build();
+    ASSERT_TRUE(matcher->match(plan));
+    std::vector<std::string> expectedNames{
+        "nation1", "region1", "nation2", "region2"};
+    ASSERT_EQ(plan->outputType()->names(), expectedNames);
+  }
+  // doesn't allow push down joins that depend on unnest
+  {
+    lp::PlanBuilder::Context ctx;
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{ctx}
+            .values({rowVector})
+            .unnest({lp::Call("array_distinct", lp::Col("regions"))
+                         .unnestAs("distinct_regions")})
+            .unnest({lp::Call("array_distinct", lp::Col("distinct_regions"))
+                         .unnestAs("region")})
+            .project({"nation AS nation1", "region AS region1"})
+            .join(
+                lp::PlanBuilder{ctx}
+                    .values({rowVector})
+                    .unnest({lp::Call("array_distinct", lp::Col("regions"))
+                                 .unnestAs("distinct_regions")})
+                    .unnest(
+                        {lp::Call("array_distinct", lp::Col("distinct_regions"))
+                             .unnestAs("region")})
+                    .project({"nation AS nation2", "region AS region2"}),
+                "region1 = region2",
+                lp::JoinType::kInner)
+            .build();
+    auto plan = toSingleNodePlan(logicalPlanUnnest);
+
+    auto matcher = core::PlanMatcherBuilder{}
+                       .values()
+                       .project()
+                       .unnest()
+                       .project()
+                       .unnest()
+                       .project()
+                       .hashJoin(core::PlanMatcherBuilder{}
+                                     .values()
+                                     .project()
+                                     .unnest()
+                                     .project()
+                                     .unnest()
+                                     .project()
+                                     .build())
+                       .project()
+                       .build();
+    ASSERT_TRUE(matcher->match(plan));
+    std::vector<std::string> expectedNames{
+        "nation1", "region1", "nation2", "region2"};
+    ASSERT_EQ(plan->outputType()->names(), expectedNames);
+  }
+}
+
 } // namespace
 } // namespace facebook::velox::optimizer
 
