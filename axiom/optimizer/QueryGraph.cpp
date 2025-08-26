@@ -16,7 +16,7 @@
 
 #include "axiom/optimizer/QueryGraph.h"
 #include "axiom/optimizer/FunctionRegistry.h"
-#include "axiom/optimizer/Plan.h"
+#include "axiom/optimizer/Optimization.h"
 #include "axiom/optimizer/PlanUtils.h"
 #include "velox/expression/ScopedVarSetter.h"
 

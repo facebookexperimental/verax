@@ -28,6 +28,7 @@
 #include "velox/parse/TypeResolver.h"
 
 #include "axiom/logical_plan/PlanPrinter.h"
+#include "axiom/optimizer/Optimization.h"
 #include "axiom/optimizer/Plan.h"
 #include "axiom/optimizer/SchemaResolver.h"
 #include "axiom/optimizer/VeloxHistory.h"
