@@ -100,6 +100,8 @@ class Optimization {
   /// discards the candidate.
   void makeJoins(RelationOpPtr plan, PlanState& state);
 
+  void makeJoins(PlanState& state);
+
   const std::shared_ptr<core::QueryCtx>& veloxQueryCtx() const {
     return veloxQueryCtx_;
   }

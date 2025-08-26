@@ -1020,7 +1020,7 @@ void DerivedTable::makeInitialPlan() {
     state.targetColumns.unionColumns(expr);
   }
 
-  optimization->makeJoins(nullptr, state);
+  optimization->makeJoins(state);
 
   auto plan = state.plans.best()->op;
 

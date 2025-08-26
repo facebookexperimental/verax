@@ -66,7 +66,7 @@ PlanP Optimization::bestPlan() {
   topState_.dt = root_;
   topState_.setTargetColumnsForDt(targetColumns);
 
-  makeJoins(nullptr, topState_);
+  makeJoins(topState_);
 
   return topState_.plans.best();
 }
@@ -1303,98 +1303,103 @@ PlanP unionPlan(
 }
 } // namespace
 
-void Optimization::makeJoins(RelationOpPtr plan, PlanState& state) {
-  auto& dt = state.dt;
-  if (!plan) {
-    auto firstTables = dt->startTables.toObjects();
-    std::vector<float> scores(firstTables.size());
-    for (auto i = 0; i < firstTables.size(); ++i) {
-      auto table = firstTables[i];
-      state.debugSetFirstTable(table->id());
-      scores.at(i) = startingScore(table);
-    }
-    std::vector<int32_t> ids(firstTables.size());
-    std::iota(ids.begin(), ids.end(), 0);
-    std::sort(ids.begin(), ids.end(), [&](int32_t left, int32_t right) {
-      return scores[left] > scores[right];
-    });
-    for (auto i : ids) {
-      auto from = firstTables.at(i);
-      if (from->is(PlanType::kTableNode)) {
-        auto table = from->as<BaseTable>();
-        auto indices = table->as<BaseTable>()->chooseLeafIndex();
-        // Make plan starting with each relevant index of the table.
-        const auto downstream = state.downstreamColumns();
-        for (auto index : indices) {
-          PlanStateSaver save(state);
-          state.placed.add(table);
-          auto columns = indexColumns(downstream, table, index);
+void Optimization::makeJoins(PlanState& state) {
+  auto firstTables = state.dt->startTables.toObjects();
+  std::vector<float> scores(firstTables.size());
+  for (auto i = 0; i < firstTables.size(); ++i) {
+    auto table = firstTables[i];
+    state.debugSetFirstTable(table->id());
+    scores.at(i) = startingScore(table);
+  }
+  std::vector<int32_t> ids(firstTables.size());
+  std::iota(ids.begin(), ids.end(), 0);
+  std::sort(ids.begin(), ids.end(), [&](int32_t left, int32_t right) {
+    return scores[left] > scores[right];
+  });
+  for (auto i : ids) {
+    auto from = firstTables.at(i);
+    if (from->is(PlanType::kTableNode)) {
+      auto table = from->as<BaseTable>();
+      auto indices = table->chooseLeafIndex();
+      // Make plan starting with each relevant index of the table.
+      const auto downstream = state.downstreamColumns();
+      for (auto index : indices) {
+        PlanStateSaver save(state);
+        state.placed.add(table);
+        auto columns = indexColumns(downstream, table, index);
 
-          state.columns.unionObjects(columns);
-          auto distribution =
-              TableScan::outputDistribution(table, index, columns);
-          auto* scan = make<TableScan>(
-              nullptr,
-              std::move(distribution),
-              table,
-              index,
-              index->table->cardinality * table->filterSelectivity,
-              std::move(columns));
-          state.addCost(*scan);
-          makeJoins(scan, state);
-        }
-      } else if (from->is(PlanType::kValuesTableNode)) {
-        const auto* valuesTable = from->as<ValuesTable>();
-        ColumnVector columns;
-        state.downstreamColumns().forEach([&](PlanObjectCP object) {
-          auto* column = object->as<Column>();
-          if (valuesTable == column->relation()) {
-            columns.push_back(column);
-          }
-        });
-
-        PlanStateSaver save{state};
-        state.placed.add(valuesTable);
         state.columns.unionObjects(columns);
-        auto* scan = make<Values>(*valuesTable, std::move(columns));
+        auto distribution =
+            TableScan::outputDistribution(table, index, columns);
+        auto* scan = make<TableScan>(
+            nullptr,
+            std::move(distribution),
+            table,
+            index,
+            index->table->cardinality * table->filterSelectivity,
+            std::move(columns));
         state.addCost(*scan);
         makeJoins(scan, state);
-      } else {
-        // Start with a derived table.
-        placeDerivedTable(from->as<const DerivedTable>(), state);
       }
-    }
-  } else {
-    if (state.isOverBest()) {
-      trace(OptimizerOptions::kExceededBest, dt->id(), state.cost, *plan);
-      return;
-    }
-    // Add multitable filters not associated to a non-inner join.
-    if (placeConjuncts(plan, state, false)) {
-      return;
-    }
-    auto candidates = nextJoins(state);
-    if (candidates.empty()) {
-      if (placeConjuncts(plan, state, true)) {
-        return;
-      }
-      addPostprocess(dt, plan, state);
-      auto kept = state.plans.addPlan(plan, state);
-      trace(
-          kept ? OptimizerOptions::kRetained : OptimizerOptions::kExceededBest,
-          dt->id(),
-          state.cost,
-          *plan);
+    } else if (from->is(PlanType::kValuesTableNode)) {
+      const auto* valuesTable = from->as<ValuesTable>();
+      ColumnVector columns;
+      state.downstreamColumns().forEach([&](PlanObjectCP object) {
+        auto* column = object->as<Column>();
+        if (valuesTable == column->relation()) {
+          columns.push_back(column);
+        }
+      });
 
+      PlanStateSaver save{state};
+      state.placed.add(valuesTable);
+      state.columns.unionObjects(columns);
+      auto* scan = make<Values>(*valuesTable, std::move(columns));
+      state.addCost(*scan);
+      makeJoins(scan, state);
+    } else {
+      // Start with a derived table.
+      placeDerivedTable(from->as<const DerivedTable>(), state);
+    }
+  }
+}
+
+void Optimization::makeJoins(RelationOpPtr plan, PlanState& state) {
+  VELOX_CHECK_NOT_NULL(plan);
+  auto dt = state.dt;
+
+  if (state.isOverBest()) {
+    trace(OptimizerOptions::kExceededBest, dt->id(), state.cost, *plan);
+    return;
+  }
+
+  // Add multitable filters not associated to a non-inner join.
+  if (placeConjuncts(plan, state, false)) {
+    return;
+  }
+
+  auto candidates = nextJoins(state);
+  if (candidates.empty()) {
+    if (placeConjuncts(plan, state, true)) {
       return;
     }
-    std::vector<NextJoin> nextJoins;
-    nextJoins.reserve(candidates.size());
-    for (auto& candidate : candidates) {
-      addJoin(candidate, plan, state, nextJoins);
-    }
-    tryNextJoins(state, nextJoins);
+
+    addPostprocess(dt, plan, state);
+    auto kept = state.plans.addPlan(plan, state);
+    trace(
+        kept ? OptimizerOptions::kRetained : OptimizerOptions::kExceededBest,
+        dt->id(),
+        state.cost,
+        *plan);
+    return;
   }
+
+  std::vector<NextJoin> nextJoins;
+  nextJoins.reserve(candidates.size());
+  for (auto& candidate : candidates) {
+    addJoin(candidate, plan, state, nextJoins);
+  }
+  tryNextJoins(state, nextJoins);
 }
 
 PlanP Optimization::makePlan(
@@ -1511,7 +1516,7 @@ PlanP Optimization::makeDtPlan(
       inner.targetColumns = key.columns;
     }
 
-    makeJoins(nullptr, inner);
+    makeJoins(inner);
     memo_[key] = std::move(inner.plans);
     plans = &memo_[key];
   } else {
