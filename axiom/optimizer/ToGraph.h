@@ -310,6 +310,8 @@ class ToGraph {
   // Adds a JoinEdge corresponding to 'join' to the enclosing DerivedTable.
   void translateJoin(const logical_plan::JoinNode& join);
 
+  void translateUnnest(const logical_plan::UnnestNode& unnest);
+
   DerivedTableP translateSetJoin(
       const logical_plan::SetNode& set,
       DerivedTableP setDt);

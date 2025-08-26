@@ -382,6 +382,10 @@ class Optimization {
     return toVelox_.toVeloxPlan(std::move(plan), runnerOptions_);
   }
 
+  const DerivedTable& queryGraph() const {
+    return *root_;
+  }
+
   std::pair<connector::ConnectorTableHandlePtr, std::vector<core::TypedExprPtr>>
   leafHandle(int32_t id) {
     return toVelox_.leafHandle(id);
@@ -593,6 +597,12 @@ class Optimization {
 
   // Tries a right hash join variant of left outer or left semijoin.
   void joinByHashRight(
+      const RelationOpPtr& plan,
+      const JoinCandidate& candidate,
+      PlanState& state,
+      std::vector<NextJoin>& toTry);
+
+  void crossJoinUnnest(
       const RelationOpPtr& plan,
       const JoinCandidate& candidate,
       PlanState& state,

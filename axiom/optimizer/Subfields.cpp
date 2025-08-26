@@ -105,6 +105,38 @@ void ToGraph::markFieldAccessed(
       return;
     }
 
+    if (kind == lp::NodeKind::kUnnest) {
+      auto* unnest = source.planNode->asUnchecked<lp::UnnestNode>();
+      if (!unnest->inputs().empty()) {
+        const auto& input = unnest->onlyInput();
+
+        const auto& inputType = input->outputType();
+        if (ordinal < inputType->size()) {
+          markFieldAccessed(
+              {.planNode = input.get()},
+              ordinal,
+              steps,
+              isControl,
+              context,
+              sources);
+          return;
+        } else {
+          const std::vector<const RowType*> inputContext = {inputType.get()};
+          const std::vector<LogicalContextSource> inputSources = {
+              {.planNode = input.get()}};
+          std::vector<Step> subSteps;
+
+          // TODO Fix the logic of mapping output column index to unnest
+          // expression. Existing logic doesn't work for maps.
+          const auto& unnestExpr =
+              unnest->unnestExpressions().at(ordinal - inputType->size());
+          markSubfields(
+              unnestExpr, subSteps, isControl, inputContext, inputSources);
+        }
+      }
+      return;
+    }
+
     if (kind == lp::NodeKind::kSet) {
       const auto* set = source.planNode->asUnchecked<lp::SetNode>();
       for (const auto& input : set->inputs()) {

@@ -17,6 +17,7 @@
 #pragma once
 
 #include "axiom/optimizer/BitSet.h"
+#include "velox/common/Enums.h"
 
 namespace facebook::velox::optimizer {
 
@@ -34,6 +35,7 @@ enum class PlanType {
   // Plan nodes.
   kTableNode,
   kValuesTableNode,
+  kUnnestTableNode,
   kDerivedTableNode,
   kAggregationNode,
   kProjectNode,
@@ -42,6 +44,8 @@ enum class PlanType {
   kOrderByNode,
   kLimitNode,
 };
+
+VELOX_DECLARE_ENUM_NAME(PlanType);
 
 /// True if 'type' is an expression with a value.
 inline bool isExprType(PlanType type) {

@@ -196,7 +196,7 @@ void DerivedTable::findSingleRowDts() {
       singleRowDts.add(object);
     }
   });
-  // if everything is a single row dt, then process tese as cross products and
+  // if everything is a single row dt, then process these as cross products and
   // not as placed with filters.
   if (numSingle == tables.size()) {
     singleRowDts = PlanObjectSet();
@@ -227,6 +227,8 @@ void DerivedTable::linkTablesToJoins() {
         table->as<BaseTable>()->addJoinedBy(join);
       } else if (table->is(PlanType::kValuesTableNode)) {
         table->as<ValuesTable>()->addJoinedBy(join);
+      } else if (table->is(PlanType::kUnnestTableNode)) {
+        table->as<UnnestTable>()->addJoinedBy(join);
       } else {
         VELOX_CHECK(table->is(PlanType::kDerivedTableNode));
         table->as<DerivedTable>()->addJoinedBy(join);

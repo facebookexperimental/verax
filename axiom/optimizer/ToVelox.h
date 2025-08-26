@@ -189,6 +189,11 @@ class ToVelox {
       const Values& values,
       axiom::runner::ExecutableFragment& fragment);
 
+  core::PlanNodePtr makeUnnest(
+      const Unnest& unnest,
+      axiom::runner::ExecutableFragment& fragment,
+      std::vector<axiom::runner::ExecutableFragment>& stages);
+
   // Makes a tree of PlanNode for a tree of
   // RelationOp. 'fragment' is the fragment that 'op'
   // belongs to. If op or children are repartitions then the

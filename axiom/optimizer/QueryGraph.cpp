@@ -61,6 +61,9 @@ std::string Column::toString() const {
       case PlanType::kValuesTableNode:
         cname = relation_->as<ValuesTable>()->cname;
         break;
+      case PlanType::kUnnestTableNode:
+        cname = relation_->as<UnnestTable>()->cname;
+        break;
       case PlanType::kDerivedTableNode:
         cname = relation_->as<DerivedTable>()->cname;
         break;
@@ -104,8 +107,12 @@ std::string Call::toString() const {
   std::stringstream out;
   out << name_ << "(";
   for (auto i = 0; i < args_.size(); ++i) {
-    out << args_[i]->toString() << (i == args_.size() - 1 ? ")" : ", ");
+    if (i > 0) {
+      out << ", ";
+    }
+    out << args_[i]->toString();
   }
+  out << ")";
   return out.str();
 }
 
@@ -177,6 +184,14 @@ std::string ValuesTable::toString() const {
   out << "{" << PlanObject::toString();
   out << values.id() << " " << cname << "}";
   return out.str();
+}
+
+void UnnestTable::addJoinedBy(JoinEdgeP join) {
+  pushBackUnique(joinedBy, join);
+}
+
+std::string UnnestTable::toString() const {
+  return "<unnest>";
 }
 
 JoinSide JoinEdge::sideOf(PlanObjectCP side, bool other) const {

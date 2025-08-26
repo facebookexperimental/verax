@@ -15,6 +15,7 @@
  */
 
 #include "axiom/optimizer/tests/HiveQueriesTestBase.h"
+#include "axiom/logical_plan/PlanPrinter.h"
 #include "axiom/optimizer/tests/ParquetTpchTest.h"
 
 namespace lp = facebook::velox::logical_plan;
@@ -96,11 +97,14 @@ void HiveQueriesTestBase::checkResults(
   ASSERT_TRUE(statement->isSelect());
   auto logicalPlan = statement->asUnchecked<test::SelectStatement>()->plan();
 
+  LOG(ERROR) << lp::PlanPrinter::toText(*logicalPlan);
+
   auto referenceResults = runVelox(referencePlan);
 
   // Distributed.
   {
     auto plan = planVelox(logicalPlan, {.numWorkers = 4, .numDrivers = 4});
+    LOG(ERROR) << plan.plan->toString();
     checkResults(plan, referenceResults);
   }
 

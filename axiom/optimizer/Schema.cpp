@@ -331,6 +331,13 @@ IndexInfo joinCardinality(PlanObjectCP table, CPSpan<Column> keys) {
     computeCardinalities(valuesTable->cardinality());
     return result;
   }
+
+  if (table->is(PlanType::kUnnestTableNode)) {
+    const auto* unnestTable = table->as<UnnestTable>();
+    computeCardinalities(unnestTable->cardinality());
+    return result;
+  }
+
   VELOX_CHECK(table->is(PlanType::kDerivedTableNode));
   const auto* dt = table->as<DerivedTable>();
   computeCardinalities(dt->cardinality);

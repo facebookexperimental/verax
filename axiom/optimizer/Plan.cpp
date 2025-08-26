@@ -16,6 +16,7 @@
 
 #include "axiom/optimizer/Plan.h"
 #include "axiom/optimizer/Cost.h"
+#include "axiom/optimizer/DerivedTablePrinter.h"
 
 #include <iostream>
 
@@ -96,6 +97,8 @@ Optimization::Optimization(
     join->guessFanout();
   }
   toGraph_.setDtOutput(root_, *logicalPlan_);
+
+  LOG(ERROR) << std::endl << DerivedTablePrinter::toText(*root_);
 }
 
 void Optimization::trace(
@@ -359,6 +362,10 @@ const JoinEdgeVector& joinedBy(PlanObjectCP table) {
 
   if (table->is(PlanType::kValuesTableNode)) {
     return table->as<ValuesTable>()->joinedBy;
+  }
+
+  if (table->is(PlanType::kUnnestTableNode)) {
+    return table->as<UnnestTable>()->joinedBy;
   }
 
   VELOX_DCHECK(table->is(PlanType::kDerivedTableNode));
@@ -1026,8 +1033,7 @@ void Optimization::joinByIndex(
       c.unionSet(filter->columns());
     }
 
-    ColumnVector columns;
-    c.forEach([&](PlanObjectCP o) { columns.push_back(o->as<Column>()); });
+    auto columns = c.toObjects<Column>();
 
     auto* scan = make<TableScan>(
         newPartition,
@@ -1071,6 +1077,10 @@ PlanObjectSet availableColumns(PlanObjectCP object) {
     }
   } else if (object->is(PlanType::kValuesTableNode)) {
     for (auto& c : object->as<ValuesTable>()->columns) {
+      set.add(c);
+    }
+  } else if (object->is(PlanType::kUnnestTableNode)) {
+    for (auto& c : object->as<UnnestTable>()->columns) {
       set.add(c);
     }
   } else if (object->is(PlanType::kDerivedTableNode)) {
@@ -1416,6 +1426,26 @@ void Optimization::joinByHashRight(
   state.addNextJoin(&candidate, join, {buildOp}, toTry);
 }
 
+void Optimization::crossJoinUnnest(
+    const RelationOpPtr& plan,
+    const JoinCandidate& candidate,
+    PlanState& state,
+    std::vector<NextJoin>& toTry) {
+  auto c = state.downstreamColumns();
+  c.intersect(state.columns);
+
+  auto unnestTable = candidate.tables.at(0)->as<UnnestTable>();
+  c.unionColumns(unnestTable->columns);
+
+  auto* unnest =
+      make<Unnest>(plan, candidate.join->leftKeys(), c.toObjects<Column>());
+
+  state.placed.add(candidate.tables.at(0));
+  state.columns.unionSet(c);
+  state.addCost(*unnest);
+  state.addNextJoin(&candidate, unnest, {}, toTry);
+}
+
 void Optimization::crossJoin(
     const RelationOpPtr& plan,
     const JoinCandidate& candidate,
@@ -1432,6 +1462,13 @@ void Optimization::addJoin(
   std::vector<NextJoin> toTry;
   if (!candidate.join) {
     crossJoin(plan, candidate, state, toTry);
+    return;
+  }
+
+  if (candidate.tables.size() == 1 &&
+      candidate.tables[0]->is(PlanType::kUnnestTableNode)) {
+    crossJoinUnnest(plan, candidate, state, toTry);
+    result.insert(result.end(), toTry.begin(), toTry.end());
     return;
   }
 
@@ -1668,6 +1705,7 @@ void Optimization::makeJoins(RelationOpPtr plan, PlanState& state) {
   if (!plan) {
     auto firstTables = dt->startTables.toObjects();
     std::vector<float> scores(firstTables.size());
+
     for (auto i = 0; i < firstTables.size(); ++i) {
       auto table = firstTables[i];
       state.debugSetFirstTable(table->id());
@@ -1719,9 +1757,29 @@ void Optimization::makeJoins(RelationOpPtr plan, PlanState& state) {
         auto* scan = make<Values>(*valuesTable, std::move(columns));
         state.addCost(*scan);
         makeJoins(scan, state);
-      } else {
+      } else if (from->is(PlanType::kUnnestTableNode)) {
+        const auto* unnestTable = from->as<UnnestTable>();
+        ColumnVector columns;
+        state.downstreamColumns().forEach([&](PlanObjectCP object) {
+          auto* column = object->as<Column>();
+          if (unnestTable == column->relation()) {
+            columns.push_back(column);
+          }
+        });
+
+        PlanStateSaver save{state};
+        state.placed.add(unnestTable);
+        state.columns.unionObjects(columns);
+        auto* scan = make<Unnest>(
+            nullptr, unnestTable->constantUnnestExprs, std::move(columns));
+        state.addCost(*scan);
+        makeJoins(scan, state);
+      } else if (from->is(PlanType::kDerivedTableNode)) {
         // Start with a derived table.
         placeDerivedTable(from->as<const DerivedTable>(), state);
+      } else {
+        VELOX_FAIL(
+            "Unexpected start table: {}", PlanTypeName::toName(from->type()));
       }
     }
   } else {

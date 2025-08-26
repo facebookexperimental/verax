@@ -515,6 +515,9 @@ struct JoinSide {
   }
 };
 
+struct UnnestTable;
+using UnnestTableCP = const UnnestTable*;
+
 /// Represents a possibly directional equality join edge.
 /// 'rightTable' is always set. 'leftTable' is nullptr if 'leftKeys' come from
 /// different tables. If so, 'this' must be not inner and not full outer.
@@ -545,7 +548,8 @@ class JoinEdge {
         markColumn_(spec.markColumn),
         directed_(spec.directed) {
     VELOX_CHECK_NOT_NULL(rightTable);
-    if (isInner()) {
+
+    if (isInner() && !isUnnest()) {
       VELOX_CHECK(filter_.empty());
     }
   }
@@ -562,6 +566,24 @@ class JoinEdge {
       PlanObjectCP leftTable,
       PlanObjectCP rightTable) {
     return make<JoinEdge>(leftTable, rightTable, Spec{.rightNotExists = true});
+  }
+
+  /// Make a join edge for CROSS JOIN UNNEST.
+  ///
+  /// @param leftTable The left-side table that produced inputs to unnest.
+  /// Nullptr if unnest depends on multiple left-side tables.
+  /// @param rightTable Unnest table. Cannot be null.
+  /// @param unnestExprs One or more unnest expressions. These are stored in the
+  /// 'leftKeys' of the JoinEdge.
+  static JoinEdge* makeUnnest(
+      PlanObjectCP leftTable,
+      UnnestTableCP rightTable,
+      ExprVector unnestExprs) {
+    VELOX_CHECK(!unnestExprs.empty());
+    VELOX_CHECK_NOT_NULL(rightTable);
+    auto edge = make<JoinEdge>(leftTable, rightTable, Spec{.directed = true});
+    edge->leftKeys_ = std::move(unnestExprs);
+    return edge;
   }
 
   PlanObjectCP leftTable() const {
@@ -598,10 +620,30 @@ class JoinEdge {
 
   void addEquality(ExprCP left, ExprCP right, bool update = false);
 
+  bool isSemi() const {
+    return rightExists_;
+  }
+
+  bool isAnti() const {
+    return rightNotExists_;
+  }
+
   /// True if inner join.
   bool isInner() const {
     return !leftOptional_ && !rightOptional_ && !rightExists_ &&
-        !rightNotExists_;
+        !rightNotExists_ && !isUnnest();
+  }
+
+  bool isUnnest() const {
+    return rightTable_->is(PlanType::kUnnestTableNode);
+  }
+
+  bool isSemi() const {
+    return rightExists_;
+  }
+
+  bool isAnti() const {
+    return rightNotExists_;
   }
 
   /// True if all tables referenced from 'leftKeys' must be placed before
@@ -805,6 +847,30 @@ struct ValuesTable : public PlanObject {
 
   float cardinality() const {
     return values.cardinality();
+  }
+
+  bool isTable() const override {
+    return true;
+  }
+
+  void addJoinedBy(JoinEdgeP join);
+
+  std::string toString() const override;
+};
+
+struct UnnestTable : public PlanObject {
+  explicit UnnestTable() : PlanObject{PlanType::kUnnestTableNode} {}
+
+  Name cname{nullptr};
+
+  ExprVector constantUnnestExprs;
+
+  ColumnVector columns;
+
+  JoinEdgeVector joinedBy;
+
+  float cardinality() const {
+    return 1;
   }
 
   bool isTable() const override {

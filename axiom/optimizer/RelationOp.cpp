@@ -815,4 +815,67 @@ std::string UnionAll::toString(bool recursive, bool detail) const {
   return out.str();
 }
 
+Unnest::Unnest(
+    RelationOpPtr input,
+    ExprVector unnestExprs,
+    ColumnVector columns)
+    : RelationOp(
+          RelType::kUnnest,
+          input,
+          input == nullptr ? Distribution::gather() : input->distribution(),
+          columns),
+      unnestExprs_{std::move(unnestExprs)} {
+  VELOX_CHECK(!unnestExprs_.empty());
+  cost_.inputCardinality = inputCardinality();
+  cost_.fanout = 1;
+
+  // TODO Fill in cost_.unitCost and others.
+}
+
+const QGstring& Unnest::historyKey() const {
+  if (!key_.empty()) {
+    return key_;
+  }
+  std::stringstream out;
+  auto* opt = queryCtx()->optimization();
+  ScopedVarSetter cname(&opt->cnamesInExpr(), false);
+
+  if (input_ != nullptr) {
+    out << input_->historyKey() << " ";
+  }
+  out << "unnest " << "(";
+
+  std::vector<std::string> strings;
+  for (auto& expr : unnestExprs_) {
+    strings.push_back(expr->toString());
+  }
+  std::sort(strings.begin(), strings.end());
+  for (auto& s : strings) {
+    out << s << ", ";
+  }
+  out << ")";
+  key_ = sanitizeHistoryKey(out.str());
+  return key_;
+}
+
+std::string Unnest::toString(bool recursive, bool detail) const {
+  std::stringstream out;
+  if (recursive && input() != nullptr) {
+    out << input()->toString(true, detail) << " ";
+  }
+  if (detail) {
+    out << "Unnest (";
+    for (auto i = 0; i < unnestExprs_.size(); ++i) {
+      if (i > 0) {
+        out << ", ";
+      }
+      out << unnestExprs_[i]->toString();
+    }
+    out << ")\n";
+  } else {
+    out << "unnest " << unnestExprs_.size() << " exprs ";
+  }
+  return out.str();
+}
+
 } // namespace facebook::velox::optimizer

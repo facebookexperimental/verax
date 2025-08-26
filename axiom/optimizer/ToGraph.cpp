@@ -931,6 +931,74 @@ PlanObjectP ToGraph::addOrderBy(const lp::SortNode& order) {
   return currentDt_;
 }
 
+void ToGraph::translateUnnest(const logical_plan::UnnestNode& unnest) {
+  if (unnest.inputs().empty()) {
+    auto* unnestTable = make<UnnestTable>();
+    unnestTable->cname = newCName("ut");
+
+    for (const auto& unnestExpr : unnest.unnestExpressions()) {
+      auto expr = translateExpr(unnestExpr);
+      VELOX_CHECK_EQ(0, expr->allTables().size());
+
+      unnestTable->constantUnnestExprs.emplace_back(expr);
+    }
+
+    const auto& type = unnest.outputType();
+    for (auto i = 0; i < type->size(); ++i) {
+      const auto& name = type->nameOf(i);
+      Value value{toType(type->childAt(i)), 1};
+      auto* column =
+          make<Column>(toName(name), unnestTable, value, toName(name));
+
+      unnestTable->columns.push_back(column);
+      renames_[name] = column;
+    }
+
+    planLeaves_[&unnest] = unnestTable;
+    currentDt_->tables.push_back(unnestTable);
+    currentDt_->tableSet.add(unnestTable);
+
+    return;
+  }
+
+  makeQueryGraph(*unnest.onlyInput(), allow(PlanType::kJoinNode));
+
+  auto* unnestTable = make<UnnestTable>();
+  unnestTable->cname = newCName("ut");
+
+  const auto numInputColumns = unnest.onlyInput()->outputType()->size();
+
+  const auto& type = unnest.outputType();
+  for (auto i = numInputColumns; i < type->size(); ++i) {
+    const auto& name = type->nameOf(i);
+    Value value{toType(type->childAt(i)), 1};
+    auto* column = make<Column>(toName(name), unnestTable, value, toName(name));
+
+    unnestTable->columns.push_back(column);
+    renames_[name] = column;
+  }
+
+  planLeaves_[&unnest] = unnestTable;
+  currentDt_->tables.push_back(unnestTable);
+  currentDt_->tableSet.add(unnestTable);
+
+  ExprVector unnestExprs;
+  unnestExprs.reserve(unnest.unnestExpressions().size());
+
+  PlanObjectSet leftTables;
+  for (const auto& unnestExpr : unnest.unnestExpressions()) {
+    auto expr = translateExpr(unnestExpr);
+    leftTables.unionSet(expr->allTables());
+    unnestExprs.emplace_back(expr);
+  }
+
+  auto* edge = JoinEdge::makeUnnest(
+      leftTables.size() == 1 ? leftTables.toObjects()[0] : nullptr,
+      unnestTable,
+      unnestExprs);
+  currentDt_->joins.push_back(edge);
+}
+
 namespace {
 
 // Fills 'leftKeys' and 'rightKeys's from 'conjuncts' so that
@@ -1609,6 +1677,12 @@ PlanObjectP ToGraph::makeQueryGraph(
       return currentDt_;
     }
     case lp::NodeKind::kUnnest:
+      if (!contains(allowedInDt, PlanType::kJoinNode)) {
+        return wrapInDt(node);
+      }
+
+      translateUnnest(*node.asUnchecked<lp::UnnestNode>());
+      return currentDt_;
     default:
       VELOX_NYI(
           "Unsupported PlanNode {}", lp::NodeKindName::toName(node.kind()));

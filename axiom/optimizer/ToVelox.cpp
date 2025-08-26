@@ -196,16 +196,21 @@ PlanAndStats ToVelox::toVeloxPlan(
     plan = addGather(plan);
   }
 
+  LOG(ERROR) << std::endl << plan->toString(true, true);
+
   ExecutableFragment top;
   std::vector<ExecutableFragment> stages;
   top.fragment.planNode = makeFragment(std::move(plan), top, stages);
 
   stages.push_back(std::move(top));
-  return PlanAndStats{
+  auto planAndStats = PlanAndStats{
       std::make_shared<axiom::runner::MultiFragmentPlan>(
           std::move(stages), options),
       std::move(nodeHistory_),
       std::move(prediction_)};
+
+  LOG(ERROR) << planAndStats.plan->toString();
+  return planAndStats;
 }
 
 RowTypePtr ToVelox::makeOutputType(const ColumnVector& columns) {
@@ -480,13 +485,15 @@ namespace {
 // related functions.
 class TempProjections {
  public:
-  TempProjections(ToVelox& tv, const RelationOp& input)
+  TempProjections(ToVelox& tv, const RelationOp* input)
       : toVelox_(tv), input_(input) {
-    for (auto& column : input_.columns()) {
-      exprChannel_[column] = nextChannel_++;
-      names_.push_back(ToVelox::outputName(column));
-      fieldRefs_.push_back(std::make_shared<core::FieldAccessTypedExpr>(
-          toTypePtr(column->value().type), names_.back()));
+    if (input != nullptr) {
+      for (auto& column : input_->columns()) {
+        exprChannel_[column] = nextChannel_++;
+        names_.push_back(ToVelox::outputName(column));
+        fieldRefs_.push_back(std::make_shared<core::FieldAccessTypedExpr>(
+            toTypePtr(column->value().type), names_.back()));
+      }
     }
     exprs_.insert(exprs_.begin(), fieldRefs_.begin(), fieldRefs_.end());
   }
@@ -532,7 +539,9 @@ class TempProjections {
   }
 
   core::PlanNodePtr maybeProject(core::PlanNodePtr inputNode) {
-    if (nextChannel_ == input_.columns().size()) {
+    const auto numInputColumns =
+        input_ == nullptr ? 0 : input_->columns().size();
+    if (nextChannel_ == numInputColumns) {
       return inputNode;
     }
 
@@ -542,7 +551,7 @@ class TempProjections {
 
  private:
   ToVelox& toVelox_;
-  const RelationOp& input_;
+  const RelationOp* input_;
   int32_t nextChannel_{0};
   std::vector<core::FieldAccessTypedExprPtr> fieldRefs_;
   std::vector<std::string> names_;
@@ -653,7 +662,7 @@ core::PlanNodePtr ToVelox::makeOrderBy(
   if (isSingle_) {
     auto input = makeFragment(op.input(), fragment, stages);
 
-    TempProjections projections(*this, *op.input());
+    TempProjections projections(*this, op.input().get());
     auto keys = projections.toFieldRefs(op.distribution().orderKeys);
     auto project = projections.maybeProject(input);
 
@@ -694,7 +703,7 @@ core::PlanNodePtr ToVelox::makeOrderBy(
   auto source = newFragment();
   auto input = makeFragment(op.input(), source, stages);
 
-  TempProjections projections(*this, *op.input());
+  TempProjections projections(*this, op.input().get());
   auto keys = projections.toFieldRefs(op.distribution().orderKeys);
   auto project = projections.maybeProject(input);
 
@@ -1112,8 +1121,8 @@ velox::core::PlanNodePtr ToVelox::makeJoin(
     const Join& join,
     axiom::runner::ExecutableFragment& fragment,
     std::vector<axiom::runner::ExecutableFragment>& stages) {
-  TempProjections leftProjections(*this, *join.input());
-  TempProjections rightProjections(*this, *join.right);
+  TempProjections leftProjections(*this, join.input().get());
+  TempProjections rightProjections(*this, join.right.get());
   auto left = makeFragment(join.input(), fragment, stages);
   auto right = makeFragment(join.right, fragment, stages);
   if (join.method == JoinMethod::kCross) {
@@ -1159,7 +1168,7 @@ core::PlanNodePtr ToVelox::makeAggregation(
       op.step == core::AggregationNode::Step::kSingle;
   const int32_t numKeys = op.groupingKeys.size();
 
-  TempProjections projections(*this, *op.input());
+  TempProjections projections(*this, op.input().get());
   std::vector<std::string> aggregateNames;
   std::vector<core::AggregationNode::Aggregate> aggregates;
   for (auto i = 0; i < op.aggregates.size(); ++i) {
@@ -1246,7 +1255,7 @@ velox::core::PlanNodePtr ToVelox::makeRepartition(
   auto source = newFragment();
   auto sourcePlan = makeFragment(repartition.input(), source, stages);
 
-  TempProjections project(*this, *repartition.input());
+  TempProjections project(*this, repartition.input().get());
   auto keys = project.toFieldRefs<core::TypedExprPtr>(
       repartition.distribution().partition);
   auto& distribution = repartition.distribution();
@@ -1376,6 +1385,63 @@ core::PlanNodePtr ToVelox::makeValues(
   return valuesNode;
 }
 
+core::PlanNodePtr ToVelox::makeUnnest(
+    const Unnest& unnest,
+    axiom::runner::ExecutableFragment& fragment,
+    std::vector<axiom::runner::ExecutableFragment>& stages) {
+  core::PlanNodePtr unnestInput;
+  std::vector<core::FieldAccessTypedExprPtr> replicatedColumns;
+  std::vector<core::FieldAccessTypedExprPtr> unnestExprs;
+
+  if (unnest.input() != nullptr) {
+    auto input = makeFragment(unnest.input(), fragment, stages);
+
+    TempProjections project(*this, unnest.input().get());
+
+    unnestExprs = project.toFieldRefs(unnest.unnestExprs());
+    unnestInput = project.maybeProject(input);
+
+    const auto& inputType = input->outputType();
+    replicatedColumns.reserve(inputType->size());
+    for (auto i = 0; i < inputType->size(); ++i) {
+      replicatedColumns.emplace_back(project.toFieldRef(unnest.columns()[i]));
+    }
+  } else {
+    auto* pool = queryCtx()->optimization()->evaluator()->pool();
+
+    std::vector<RowVectorPtr> values;
+    values.emplace_back(std::make_shared<RowVector>(
+        pool, ROW({}), nullptr, 1, std::vector<VectorPtr>{}));
+
+    auto valuesNode =
+        std::make_shared<core::ValuesNode>(nextId(), std::move(values));
+
+    TempProjections project(*this, nullptr);
+
+    unnestExprs = project.toFieldRefs(unnest.unnestExprs());
+    unnestInput = project.maybeProject(valuesNode);
+  }
+
+  std::vector<std::string> unnestNames;
+  for (auto i = replicatedColumns.size(); i < unnest.columns().size(); ++i) {
+    auto column = unnest.columns()[i];
+    unnestNames.push_back(outputName(column));
+  }
+
+  auto unnestNode = std::make_shared<core::UnnestNode>(
+      nextId(),
+      replicatedColumns,
+      unnestExprs,
+      unnestNames,
+      /* ordinalityName */ std::nullopt,
+      /* emptyUnnestValueName */ std::nullopt,
+      unnestInput);
+
+  makePredictionAndHistory(unnestNode->id(), &unnest);
+
+  return unnestNode;
+}
+
 void ToVelox::makePredictionAndHistory(
     const core::PlanNodeId& id,
     const RelationOp* op) {
@@ -1413,6 +1479,8 @@ core::PlanNodePtr ToVelox::makeFragment(
       return makeUnionAll(*op->as<UnionAll>(), fragment, stages);
     case RelType::kValues:
       return makeValues(*op->as<Values>(), fragment);
+    case RelType::kUnnest:
+      return makeUnnest(*op->as<Unnest>(), fragment, stages);
     default:
       VELOX_FAIL(
           "Unsupported RelationOp {}", static_cast<int32_t>(op->relType()));
