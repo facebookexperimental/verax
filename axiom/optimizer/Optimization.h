@@ -34,7 +34,7 @@ class Optimization {
       const logical_plan::LogicalPlanNode& plan,
       const Schema& schema,
       History& history,
-      std::shared_ptr<core::QueryCtx> queryCtx,
+      std::shared_ptr<core::QueryCtx> veloxQueryCtx,
       velox::core::ExpressionEvaluator& evaluator,
       OptimizerOptions options = OptimizerOptions(),
       axiom::runner::MultiFragmentPlan::Options runnerOptions =
@@ -100,8 +100,8 @@ class Optimization {
   /// discards the candidate.
   void makeJoins(RelationOpPtr plan, PlanState& state);
 
-  const std::shared_ptr<core::QueryCtx>& queryCtxShared() const {
-    return queryCtx_;
+  const std::shared_ptr<core::QueryCtx>& veloxQueryCtx() const {
+    return veloxQueryCtx_;
   }
 
   velox::core::ExpressionEvaluator* evaluator() const {
@@ -289,7 +289,7 @@ class Optimization {
   // Source of historical cost/cardinality information.
   History& history_;
 
-  std::shared_ptr<core::QueryCtx> queryCtx_;
+  std::shared_ptr<core::QueryCtx> veloxQueryCtx_;
 
   // Set of tables in use by the Optimizer.
   std::unordered_set<connector::ConnectorTablePtr> retainedTables_;
