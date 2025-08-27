@@ -395,7 +395,8 @@ class ToGraph {
       std::vector<Step>& steps,
       bool isControl,
       std::span<const RowType* const> context,
-      std::span<const LogicalContextSource> sources);
+      std::span<const LogicalContextSource> sources,
+      bool nodePathsWasEmpty);
 
   void markFieldAccessed(
       const logical_plan::AggregateNode& agg,

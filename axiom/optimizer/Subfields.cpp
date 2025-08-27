@@ -83,28 +83,30 @@ void ToGraph::markFieldAccessed(
     std::vector<Step>& steps,
     bool isControl,
     std::span<const RowType* const> context,
-    std::span<const LogicalContextSource> sources) {
+    std::span<const LogicalContextSource> sources,
+    bool nodePathsWasEmpty) {
   const auto& input = unnest.onlyInput();
   if (ordinal < input->outputType()->size()) {
     markFieldAccessed(
         {.planNode = input.get()}, ordinal, steps, isControl, context, sources);
-    return;
   }
-  ordinal -= input->outputType()->size();
-  for (size_t i = 0; const auto& name : unnest.unnestedNames()) {
-    if (ordinal < name.size()) {
+  // We need this to mark all unnest expressions as used, because even
+  // if they're not referenced they still can affect output cardinality.
+  // Also we don't want to call this multiple times for the same unnest.
+  if (nodePathsWasEmpty) {
+    // We need to start unnestSteps from empty, because Unnest operator isn't
+    // projection, so steps after it cannot be pushdown-ed.
+    std::vector<Step> unnestSteps;
+    for (const auto& expr : unnest.unnestExpressions()) {
       markSubfields(
-          unnest.unnestExpressions()[i],
-          steps,
+          expr,
+          unnestSteps,
           isControl,
           std::array{input->outputType().get()},
           std::array{LogicalContextSource{.planNode = input.get()}});
-      return;
+      VELOX_DCHECK(unnestSteps.empty());
     }
-    ordinal -= name.size();
-    ++i;
   }
-  VELOX_UNREACHABLE("Unnest node does not have field {}", ordinal);
 }
 
 void ToGraph::markFieldAccessed(
@@ -175,6 +177,9 @@ void ToGraph::markFieldAccessed(
   auto* fields = isControl ? &controlSubfields_ : &payloadSubfields_;
 
   const auto* path = stepsToPath(steps);
+  const auto& nodePaths = fields->nodeFields[source.planNode];
+  const bool nodePathsWasEmpty =
+      fields->nodeFields[source.planNode].resultPaths.empty();
   auto& paths = fields->nodeFields[source.planNode].resultPaths[ordinal];
   if (paths.contains(path->id())) {
     // Already marked.
@@ -191,7 +196,14 @@ void ToGraph::markFieldAccessed(
 
   if (kind == lp::NodeKind::kUnnest) {
     const auto* unnest = source.planNode->asUnchecked<lp::UnnestNode>();
-    markFieldAccessed(*unnest, ordinal, steps, isControl, context, sources);
+    markFieldAccessed(
+        *unnest,
+        ordinal,
+        steps,
+        isControl,
+        context,
+        sources,
+        nodePathsWasEmpty);
     return;
   }
 
