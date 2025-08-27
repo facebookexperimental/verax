@@ -548,11 +548,10 @@ class TempProjections {
   }
 
   core::PlanNodePtr maybeProject(core::PlanNodePtr inputNode) && {
-    if (usedChannel_ == nextChannel_ &&
-        nextChannel_ == input_.columns().size()) {
+    VELOX_DCHECK_LE(usedChannel_, nextChannel_);
+    if (nextChannel_ == input_.columns().size()) {
       return inputNode;
     }
-    VELOX_DCHECK_LE(usedChannel_, nextChannel_);
     const auto notNeededChannels = nextChannel_ - usedChannel_;
     if (notNeededChannels != 0) {
       std::unordered_set<uint32_t> unusedChannels;
@@ -1288,7 +1287,7 @@ core::PlanNodePtr ToVelox::makeAggregation(
       op.step == core::AggregationNode::Step::kSingle;
   const int32_t numKeys = op.groupingKeys.size();
 
-  TempProjections projections(*this, *op.input());
+  TempProjections projections{*this, *op.input(), false};
   std::vector<std::string> aggregateNames;
   std::vector<core::AggregationNode::Aggregate> aggregates;
   for (auto i = 0; i < op.aggregates.size(); ++i) {
