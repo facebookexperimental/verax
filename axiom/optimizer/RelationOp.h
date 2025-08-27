@@ -92,6 +92,7 @@ enum class RelType {
   kUnionAll,
   kLimit,
   kValues,
+  kUnnest,
 };
 
 VELOX_DECLARE_ENUM_NAME(RelType)

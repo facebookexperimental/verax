@@ -1062,8 +1062,7 @@ void Optimization::unnestJoin(
     state.placed.add(table);
 
     ColumnVector replicateColumns;
-    state.downstreamColumns().forEach([&](PlanObjectCP object) {
-      const auto* column = object->as<Column>();
+    state.downstreamColumns().forEach<Column>([&](auto column) {
       if (state.columns.contains(column)) {
         replicateColumns.push_back(column);
       }
@@ -1081,7 +1080,7 @@ void Optimization::unnestJoin(
         unnestExprs,
         unnestedColumns);
 
-    state.columns.unionColumns(unnestedColumns);
+    state.columns.unionObjects(unnestedColumns);
     state.addCost(*plan);
   }
   state.addNextJoin(&candidate, std::move(plan), {}, toTry);
@@ -1096,6 +1095,14 @@ void Optimization::addJoin(
     crossJoin(plan, candidate, state, result);
     return;
   }
+
+  if (candidate.tables.size() >= 1 &&
+      candidate.tables[0]->is(PlanType::kUnnestTableNode)) {
+    unnestJoin(plan, candidate, state, result);
+    return;
+  }
+
+  std::vector<NextJoin> toTry;
 
   joinByIndex(plan, candidate, state, toTry);
 
