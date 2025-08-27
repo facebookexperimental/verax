@@ -283,7 +283,7 @@ class Optimization {
       PlanState& state,
       std::vector<NextJoin>& toTry);
 
-  void unnestJoin(
+  void crossJoinUnnest(
       RelationOpPtr plan,
       const JoinCandidate& candidate,
       PlanState& state,

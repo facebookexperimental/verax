@@ -1683,16 +1683,15 @@ PlanObjectP ToGraph::makeQueryGraph(
     }
 
     case lp::NodeKind::kUnnest: {
-      // TODO: Unnest cannot be in single DT with Join right now.
-      // You can replace kUnnestTableNode here with kJoinNode to allow it and
-      // run tests to investigate failures.
+      // Unnest doesn't mixed with Join.
       if (!contains(allowedInDt, PlanType::kUnnestTableNode)) {
         return wrapInDt(node);
       }
 
       // Multiple unnest is allowed in a DT.
       // If arrives after groupBy, orderBy, limit, then starts a new DT.
-      makeQueryGraph(*node.onlyInput(), allowedInDt);
+      makeQueryGraph(
+          *node.onlyInput(), makeDtIf(allowedInDt, PlanType::kJoinNode));
 
       if (currentDt_->hasAggregation() || currentDt_->hasOrderBy() ||
           currentDt_->hasLimit()) {

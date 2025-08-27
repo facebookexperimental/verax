@@ -276,10 +276,6 @@ void PlanBuilder::resolveProjections(
 }
 
 PlanBuilder& PlanBuilder::project(const std::vector<ExprApi>& projections) {
-  if (!node_) {
-    values(ROW({}), std::vector<Variant>{Variant::row({})});
-  }
-
   std::vector<std::string> outputNames;
   outputNames.reserve(projections.size());
 
@@ -297,10 +293,6 @@ PlanBuilder& PlanBuilder::project(const std::vector<ExprApi>& projections) {
 }
 
 PlanBuilder& PlanBuilder::with(const std::vector<ExprApi>& projections) {
-  if (!node_) {
-    values(ROW({}), std::vector<Variant>{Variant::row({})});
-  }
-
   std::vector<std::string> outputNames;
   outputNames.reserve(projections.size());
 

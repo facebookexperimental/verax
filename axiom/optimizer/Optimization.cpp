@@ -1050,7 +1050,7 @@ void Optimization::crossJoin(
   VELOX_NYI("No cross joins");
 }
 
-void Optimization::unnestJoin(
+void Optimization::crossJoinUnnest(
     RelationOpPtr plan,
     const JoinCandidate& candidate,
     PlanState& state,
@@ -1070,10 +1070,11 @@ void Optimization::unnestJoin(
 
     // We don't use downstreamColumns() for unnestExprs/unnestedColumns
     // because column unnest even when columns isn't used
-    // can change cardinality of the output for other columns
+    // can change cardinality of the output for other columns.
     const auto& unnestExprs = candidate.join->filter();
     const auto& unnestedColumns = table->as<UnnestTable>()->columns;
 
+    // Plan is updated here, because it can multiple unnest.
     plan = make<Unnest>(
         std::move(plan),
         std::move(replicateColumns),
@@ -1096,9 +1097,10 @@ void Optimization::addJoin(
     return;
   }
 
+  // If this candidate has multiple Unnest they all will be handled at once.
   if (candidate.tables.size() >= 1 &&
       candidate.tables[0]->is(PlanType::kUnnestTableNode)) {
-    unnestJoin(plan, candidate, state, result);
+    crossJoinUnnest(plan, candidate, state, result);
     return;
   }
 
@@ -1393,6 +1395,8 @@ float startingScore(PlanObjectCP table) {
 
   if (table->is(PlanType::kUnnestTableNode)) {
     VELOX_FAIL("UnnestTable cannot be a starting table");
+    // Because it's rigth side of directed inner (cross) join edge.
+    // Directed edges are non-commutative, so right side cannot be starting.
   }
 
   return 10;
@@ -1467,6 +1471,8 @@ void Optimization::makeJoins(PlanState& state) {
       makeJoins(scan, state);
     } else if (from->is(PlanType::kUnnestTableNode)) {
       VELOX_FAIL("UnnestTable cannot be a starting table");
+      // Because it's rigth side of directed inner (cross) join edge.
+      // Directed edges are non-commutative, so right side cannot be starting.
     } else {
       // Start with a derived table.
       placeDerivedTable(from->as<const DerivedTable>(), state);

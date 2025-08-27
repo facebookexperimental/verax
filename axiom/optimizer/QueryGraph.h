@@ -827,10 +827,11 @@ struct ValuesTable : public PlanObject {
 struct UnnestTable : public PlanObject {
   explicit UnnestTable() : PlanObject{PlanType::kUnnestTableNode} {}
 
-  // Correlation name, distinguishes between uses of the same values node.
+  // Correlation name, distinguishes between uses of the same unnest node.
   Name cname{nullptr};
 
-  /// All columns from this 'UnnestTable'.
+  /// All unnested columns from corresponding unnest node.
+  /// All replicated columns is on other (left) side of the join edge.
   ColumnVector columns;
 
   // All joins where 'this' is an end point.
