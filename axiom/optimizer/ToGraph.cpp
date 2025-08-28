@@ -889,10 +889,9 @@ void ToGraph::translateUnnest(const lp::UnnestNode& unnest) {
     }
   }
 
-  auto* edge = make<JoinEdge>(
-      leftTable,
-      unnestTable,
-      JoinEdge::Spec{.filter = std::move(unnestExprs), .directed = true});
+  auto* edge =
+      make<JoinEdge>(leftTable, unnestTable, JoinEdge::Spec{.directed = true});
+  edge->setKeys(std::move(unnestExprs));
   edge->setFanouts(1, 1);
 
   planLeaves_[&unnest] = unnestTable;

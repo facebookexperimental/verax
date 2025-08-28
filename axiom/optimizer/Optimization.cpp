@@ -1071,7 +1071,7 @@ void Optimization::crossJoinUnnest(
     // We don't use downstreamColumns() for unnestExprs/unnestedColumns
     // because column unnest even when columns isn't used
     // can change cardinality of the output for other columns.
-    const auto& unnestExprs = candidate.join->filter();
+    const auto& unnestExprs = candidate.join->leftKeys();
     const auto& unnestedColumns = table->as<UnnestTable>()->columns;
 
     // Plan is updated here, because it can multiple unnest.

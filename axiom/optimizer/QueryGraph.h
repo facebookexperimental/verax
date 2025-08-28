@@ -545,9 +545,8 @@ class JoinEdge {
         markColumn_(spec.markColumn),
         directed_(spec.directed) {
     VELOX_CHECK_NOT_NULL(rightTable);
-    // Unnest is inner and direct. It's store unnest expressions in filter_.
-    // Otherwise, filter_ is only for non-inner joins.
-    VELOX_CHECK(directed_ || filter_.empty() || !isInner());
+    // filter_ is only for non-inner joins.
+    VELOX_CHECK(filter_.empty() || !isInner());
   }
 
   static JoinEdge* makeInner(PlanObjectCP leftTable, PlanObjectCP rightTable) {
@@ -570,6 +569,11 @@ class JoinEdge {
 
   PlanObjectCP rightTable() const {
     return rightTable_;
+  }
+
+  void setKeys(ExprVector keys) {
+    leftKeys_ = keys;
+    rightKeys_ = std::move(keys);
   }
 
   const ExprVector& leftKeys() const {

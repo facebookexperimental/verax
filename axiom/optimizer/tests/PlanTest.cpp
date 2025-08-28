@@ -1307,7 +1307,6 @@ TEST_F(PlanTest, parallelCse) {
   EXPECT_TRUE(matcher->match(plan));
 }
 
-
 TEST_F(PlanTest, unnest) {
   const std::vector<std::string> names{"x", "a_a_y", "a_a_z"};
 
