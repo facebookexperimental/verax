@@ -40,6 +40,7 @@ jobs:
       image: ghcr.io/facebookincubator/velox-dev:centos9
     env:
       CCACHE_DIR: /__w/verax/verax/ccache
+      CCACHE_BASEDIR: /__w/verax/verax
       VELOX_DEPENDENCY_SOURCE: SYSTEM
       ICU_SOURCE: SYSTEM
     steps:
@@ -62,12 +63,14 @@ jobs:
           mkdir -p "/__w/verax/verax/ccache"
           ls -la "/__w/verax/verax/ccache" || echo "Directory is empty (expected for first run)"
 
-      # Get ccache from stash
-      - name: Get Ccache Stash
-        uses: apache/infrastructure-actions/stash/restore@3354c1565d4b0e335b78a76aedd82153a9e144d4
+      # Restore ccache from cache
+      - name: Restore ccache
+        uses: actions/cache@v4
         with:
           path: /__w/verax/verax/ccache
           key: ccache-ubuntu-debug-default-gcc
+          restore-keys: |
+            ccache-ubuntu-debug-default-gcc
 
       - name: Debug Cache Restoration
         run: |
@@ -93,9 +96,91 @@ jobs:
         run: |
           git config --global --add safe.directory "/__w/verax/verax"
           git config --global --add safe.directory "*"
-      - name: Clear CCache Statistics
+      - name: Clear CCache Statistics and Configure Ccache
         run: |
+          echo "=== Ccache Configuration Debug ==="
+          echo "Ccache version:"
+          ccache --version
+          echo ""
+          echo "Ccache configuration:"
+          ccache -p
+          echo ""
+          echo "Current ccache directory: $CCACHE_DIR"
+          echo "Ccache directory permissions:"
+          ls -la "$CCACHE_DIR" || echo "Directory not accessible"
+          echo ""
+          echo "Setting ccache configuration for better debugging..."
+          # Enable verbose logging
+          ccache --set-config log_file="$CCACHE_DIR/ccache.log"
+          ccache --set-config debug=true
+          ccache --set-config debug_dir="$CCACHE_DIR/debug"
+          # Ensure cache directory is writable
+          ccache --set-config cache_dir="$CCACHE_DIR"
+
+          echo "Configuring ccache for debugging and basic optimization..."
+          # Set reasonable cache size
+          ccache --set-config max_size="10G"
+          # Try simple sloppiness settings first
+          ccache --set-config sloppiness="time_macros,file_macro"
+          # Set base directory for path normalization
+          ccache --set-config base_dir="/__w/verax/verax"
+          echo "✓ Basic ccache configuration applied - focusing on debugging first"
+          echo ""
+          echo "Updated ccache configuration:"
+          ccache -p
+          echo ""
+          echo "Verifying critical ccache settings:"
+          echo "base_dir: $(ccache --get-config base_dir)"
+          echo "hash_dir: $(ccache --get-config hash_dir)"
+          echo "sloppiness: $(ccache --get-config sloppiness)"
+          echo "max_size: $(ccache --get-config max_size)"
+          echo "cache_dir: $(ccache --get-config cache_dir)"
+          echo ""
+          echo "Clearing ccache statistics..."
           ccache -sz
+          echo "=== End Ccache Configuration Debug ==="
+
+      - name: Debug Cache State Before Build
+        run: |
+          echo "=== Cache State Before Build Debug ==="
+          echo "Ccache statistics BEFORE clearing (shows previous run results):"
+          ccache -s
+          echo ""
+          echo "Detailed cache state:"
+          echo "Cache directory: $CCACHE_DIR"
+          if [ -d "$CCACHE_DIR" ]; then
+            echo "✓ Cache directory exists"
+            echo "Directory size: $(du -sh "$CCACHE_DIR" 2>/dev/null || echo 'Unable to determine size')"
+            echo "Total files in cache: $(find "$CCACHE_DIR" -type f 2>/dev/null | wc -l)"
+            echo "Cache subdirectories:"
+            find "$CCACHE_DIR" -maxdepth 2 -type d 2>/dev/null | head -10
+            echo ""
+            echo "Sample cache files (first 10):"
+            find "$CCACHE_DIR" -type f 2>/dev/null | head -10
+            echo ""
+            echo "Cache file types breakdown:"
+            find "$CCACHE_DIR" -type f 2>/dev/null | sed 's/.*\.//' | sort | uniq -c | sort -nr | head -10
+            echo ""
+            if [ -f "$CCACHE_DIR/ccache.log" ]; then
+              echo "✓ Previous ccache log exists, size: $(wc -l < "$CCACHE_DIR/ccache.log" 2>/dev/null || echo 'unknown') lines"
+              echo "Last few log entries from previous run:"
+              tail -5 "$CCACHE_DIR/ccache.log" 2>/dev/null || echo "Could not read log"
+            else
+              echo "ℹ No previous ccache log found (normal for first run)"
+            fi
+          else
+            echo "✗ Cache directory does not exist - starting with empty cache"
+          fi
+          echo ""
+          echo "Environment check:"
+          echo "CCACHE_DIR: $CCACHE_DIR"
+          echo "Current user: $(whoami)"
+          echo "Current directory: $(pwd)"
+          echo "Ccache executable: $(which ccache)"
+          echo ""
+          echo "Now clearing statistics for this build..."
+          ccache -sz
+          echo "=== End Cache State Before Build Debug ==="
 
       # Configure with CMake to see the debug logs from CMakeLists.txt
       - name: Configure with CMake
@@ -120,6 +205,36 @@ jobs:
           fi
           echo "=== CMake Configuration Completed ==="
 
+      - name: Debug Build.ninja Before Build
+        run: |
+          echo "=== Build.ninja Analysis Before Build ==="
+          if [ -f "_build/debug/build.ninja" ]; then
+            echo "✓ build.ninja file found at _build/debug/build.ninja"
+            echo "File size: $(wc -l < "_build/debug/build.ninja") lines"
+            echo ""
+            echo "First 10 lines of build.ninja:"
+            head -10 "_build/debug/build.ninja"
+            echo ""
+            echo "First 5 compilation rules (ccache/g++/gcc commands):"
+            grep -E "ccache|g\+\+|gcc" "_build/debug/build.ninja" | head -5 || echo "No compilation commands found"
+            echo ""
+            echo "Sample absolute path usage:"
+            grep -E "/__w/" "_build/debug/build.ninja" | head -3 || echo "No absolute paths found"
+            echo ""
+            echo "Ninja build rules summary:"
+            grep "^rule " "_build/debug/build.ninja" | head -5 || echo "No rules found"
+            echo ""
+            echo "Build statements with ccache (first 3):"
+            grep -A1 -B1 "ccache" "_build/debug/build.ninja" | head -9 || echo "No ccache build statements found"
+          else
+            echo "✗ build.ninja file not found at _build/debug/build.ninja"
+            echo "Checking what files exist in _build/debug/:"
+            ls -la "_build/debug/" | head -10 || echo "Directory does not exist"
+          fi
+          echo "=== End Build.ninja Analysis ==="
+
+          echo "=== CCache Statistics After CMake ==="
+
       # Build Verax
       - name: Build Verax Debug
         id: build-verax
@@ -139,12 +254,13 @@ jobs:
           echo "=== Sample Compilation Commands (first 5) ==="
           echo "Showing first few compilation commands to verify ccache usage:"
           # Build with verbose output but limit the output to first few commands
+          # Use ninja -v for verbose output since this project uses Ninja build system
           (cd _build/debug && \
-          make VERBOSE=1 -j1 2>&1 | head -20 | grep -E "(ccache|g\+\+|clang)") || echo "No compiler commands found in first 20 lines"
+          ninja -v -j1 2>&1 | head -20 | grep -E "(ccache|g\+\+|clang)") || echo "No compiler commands found in first 20 lines"
           echo ""
           echo "=== Starting Verax Debug Build ==="
-          # Build only (cmake already done)
-          make build BUILD_DIR=debug
+          # Build only (cmake already done) - using ninja directly
+          cd _build/debug && ninja -v -j8
           echo "=== Build Completed ==="
 
       # Display ccache statistics after build
@@ -162,6 +278,59 @@ jobs:
           echo "Directory: $CCACHE_DIR"
           echo "Directory size: $(du -sh "$CCACHE_DIR" 2>/dev/null || echo 'Unable to determine size')"
           echo "Number of cached files: $(find "$CCACHE_DIR" -name "*.o" -o -name "*.d" 2>/dev/null | wc -l)"
+          echo ""
+          echo "=== Focused Ccache Debug Analysis ==="
+          if [ -f "$CCACHE_DIR/ccache.log" ]; then
+            echo "✓ Ccache log file found"
+            echo "Log file size: $(wc -l < "$CCACHE_DIR/ccache.log" 2>/dev/null || echo 'unknown') lines"
+            echo ""
+            echo "=== CRITICAL: Why are we getting primary_storage_miss? ==="
+            echo "Last 10 cache miss entries:"
+            grep "Result:" "$CCACHE_DIR/ccache.log" | tail -10
+            echo ""
+            echo "=== Hash Analysis (This will tell us why cache doesn't match) ==="
+            echo "Looking for hash-related information:"
+            grep -i "hash" "$CCACHE_DIR/ccache.log" | tail -5 || echo "No hash information found"
+            echo ""
+            echo "Looking for manifest information:"
+            grep -i "manifest" "$CCACHE_DIR/ccache.log" | tail -5 || echo "No manifest information found"
+            echo ""
+            echo "=== Direct Cache Investigation ==="
+            echo "Looking for any cache hits to understand what works:"
+            grep -E "(hit|found)" "$CCACHE_DIR/ccache.log" | head -5 || echo "No cache hits found in log"
+            echo ""
+            echo "=== Most Recent Cache Activity ==="
+            echo "Last 10 lines of ccache log:"
+            tail -10 "$CCACHE_DIR/ccache.log"
+          else
+            echo "✗ Ccache log file not found at $CCACHE_DIR/ccache.log"
+            echo "Checking if debug directory exists..."
+            if [ -d "$CCACHE_DIR/debug" ]; then
+              echo "✓ Debug directory found, listing contents:"
+              ls -la "$CCACHE_DIR/debug/" | head -10
+            else
+              echo "✗ Debug directory not found"
+            fi
+          fi
+          echo ""
+          echo "=== Environment Factors Analysis ==="
+          echo "Checking for common cache miss causes:"
+          echo "Current working directory: $(pwd)"
+          echo "Absolute path usage in compilation:"
+          # Check if recent ninja output has absolute paths
+          if [ -f "_build/debug/build.ninja" ]; then
+            echo "First 10 lines of build.ninja file:"
+            head -10 "_build/debug/build.ninja"
+            echo ""
+            echo "Sample build rules (first 5 lines with absolute paths):"
+            grep -E "/__w/" "_build/debug/build.ninja" | head -5 || echo "No absolute paths found in build.ninja"
+            echo ""
+            echo "Sample compilation commands from build.ninja:"
+            grep -E "ccache|g\+\+|gcc" "_build/debug/build.ninja" | head -3 || echo "No compilation commands found"
+          fi
+          echo ""
+          echo "Environment variables that might affect caching:"
+          env | grep -E "(PWD|CCACHE|CMAKE|USER|HOME)" | sort
           echo "=== End CCache Statistics ==="
 
       - name: Debug Cache Before Save
@@ -182,12 +351,6 @@ jobs:
           fi
           echo "=== End Cache Save Debug ==="
 
-      # Save ccache for future runs
-      - name: Save ccache
-        uses: apache/infrastructure-actions/stash/save@3354c1565d4b0e335b78a76aedd82153a9e144d4
-        with:
-          path: /__w/verax/verax/ccache
-          key: ccache-ubuntu-debug-default-gcc
 
       - name: Debug Cache After Save
         if: always()  # Run even if build failed
@@ -201,6 +364,22 @@ jobs:
             echo "⚠ Cache directory no longer exists (may be normal after save)"
           fi
           echo "=== End Cache Save Completion Debug ==="
+
+      # Upload ccache log for detailed analysis
+      - name: Upload Ccache Log for Analysis
+        if: always()  # Run even if build failed
+        uses: actions/upload-artifact@v4
+        with:
+          name: ccache-debug-logs-${{ github.run_id }}
+          path: |
+            /__w/verax/verax/ccache/ccache.log
+            /__w/verax/verax/ccache/ccache.conf
+            /__w/verax/verax/ccache/debug/*.txt
+            /__w/verax/verax/ccache/debug/*.log
+            /__w/verax/verax/ccache/debug/*.json
+            /__w/verax/verax/_build/debug/build.ninja
+          retention-days: 7
+          if-no-files-found: warn
 
       # Run Verax tests (excluding velox tests)
       - name: Run Debug Tests
