@@ -39,7 +39,7 @@ jobs:
     container:
       image: ghcr.io/facebookincubator/velox-dev:centos9
     env:
-      CCACHE_DIR: ${{ github.workspace }}/ccache
+      CCACHE_DIR: /__w/verax/verax/ccache
       VELOX_DEPENDENCY_SOURCE: SYSTEM
       ICU_SOURCE: SYSTEM
     steps:
@@ -58,15 +58,15 @@ jobs:
       - name: Ensure Ccache Dir Exists
         working-directory: ${{ github.workspace }}
         run: |
-          echo "Creating ccache directory: $CCACHE_DIR"
-          mkdir -p "$CCACHE_DIR"
-          ls -la "$CCACHE_DIR" || echo "Directory is empty (expected for first run)"
+          echo "Creating ccache directory: /__w/verax/verax/ccache"
+          mkdir -p "/__w/verax/verax/ccache"
+          ls -la "/__w/verax/verax/ccache" || echo "Directory is empty (expected for first run)"
 
       # Get ccache from stash
       - name: Get Ccache Stash
         uses: apache/infrastructure-actions/stash/restore@3354c1565d4b0e335b78a76aedd82153a9e144d4
         with:
-          path: ${{ env.CCACHE_DIR }}
+          path: /__w/verax/verax/ccache
           key: ccache-ubuntu-debug-default-gcc
 
       - name: Debug Cache Restoration
@@ -186,7 +186,7 @@ jobs:
       - name: Save ccache
         uses: apache/infrastructure-actions/stash/save@3354c1565d4b0e335b78a76aedd82153a9e144d4
         with:
-          path: ${{ env.CCACHE_DIR }}
+          path: /__w/verax/verax/ccache
           key: ccache-ubuntu-debug-default-gcc
 
       - name: Debug Cache After Save
