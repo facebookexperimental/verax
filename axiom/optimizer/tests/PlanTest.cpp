@@ -1309,7 +1309,7 @@ TEST_F(PlanTest, parallelCse) {
 
 
 TEST_F(PlanTest, unnest) {
-  const std::vector<std::string> names{"nation", "regions"};
+  const std::vector<std::string> names{"x", "a_a_y", "a_a_z"};
 
   auto rowVector = makeRowVector(
       names,
@@ -1319,234 +1319,565 @@ TEST_F(PlanTest, unnest) {
               10,
               8,
               9,
+              10,
           }),
           makeNestedArrayVectorFromJson<int64_t>({
               "[[10, 20, 30], [100, 200, 300]]",
               "[[1, 3, 2], [1, 3, 2]]",
               "[[100, 200, 300], [10, 20, 30]]",
               "[[0, 0, 0], [0, 0, 0]]",
+              "[[1, 3, 2], [1, 3, 2]]",
+          }),
+          makeNestedArrayVectorFromJson<int64_t>({
+              "[[10, 30], [100, 300]]",
+              "[[2, 1], [1, 2]]",
+              "[[100, 300], [10, 30]]",
+              "[[0, 0], [0, 0]]",
+              "[[2, 1], [1, 2]]",
           }),
       });
+  // We need to test following cases:
+  //  If something after unnest
+  //  it can depend and and not depend on unnested columns.
+  //  And we should also check that any expressions allowed inside unnest,
+  //  not only input column reference.
+  // 1. unnest
+  // 2. unnest after unnest
+  // 3. project before and after unnest
+  // -- after this we will start to use project to simplify plans --
+  // 4. filter before and after unnest
+  // 5. group by before and after unnest
+  // 6. order by before and after unnest
+  // 7. limit before and after unnest
+  // 8. join before and after unnest
 
-  // just unnest
-  {
-    auto logicalPlanUnnest =
-        lp::PlanBuilder{}.values({rowVector}).unnest({"regions"}).build();
-
-    auto referencePlanUnnest = exec::test::PlanBuilder{}
-                                   .values({rowVector})
-                                   .unnest({"nation", "regions"}, {"regions"})
-                                   .planNode();
-
-    checkSame(logicalPlanUnnest, referencePlanUnnest);
-  }
-  // project after unnest
+  std::cerr << "1. unnest\n";
   {
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
-            .unnest({lp::Col("regions").unnestAs("region")})
-            .project({"nation", "region"})
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
+                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+            })
+            .build();
+
+    auto referencePlanUnnest =
+        exec::test::PlanBuilder{}
+            .values({rowVector})
+            .project({
+                "x",
+                "a_a_y",
+                "a_a_z",
+                "array_distinct(a_a_y) AS a_a_y_d",
+                "array_distinct(a_a_z) AS a_a_z_d",
+            })
+            .unnest({"x", "a_a_y", "a_a_z"}, {"a_a_y_d", "a_a_z_d"})
+            .planNode();
+
+    checkSame(logicalPlanUnnest, referencePlanUnnest);
+  }
+  std::cerr << "2. unnest after unnest\n";
+  {
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}
+            .values({rowVector})
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
+                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+            })
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_y")).unnestAs("y"),
+                lp::Call("array_distinct", lp::Col("a_z")).unnestAs("z"),
+            })
+            .build();
+
+    auto referencePlanUnnest =
+        exec::test::PlanBuilder{}
+            .values({rowVector})
+            .project({
+                "x",
+                "a_a_y",
+                "a_a_z",
+                "array_distinct(a_a_y) AS a_a_y_d",
+                "array_distinct(a_a_z) AS a_a_z_d",
+            })
+            .unnest({"x", "a_a_y", "a_a_z"}, {"a_a_y_d", "a_a_z_d"})
+            .project({
+                "x",
+                "a_a_y",
+                "a_a_z",
+                "a_a_y_d_e",
+                "a_a_z_d_e",
+                "array_distinct(a_a_y_d_e) AS a_y_d",
+                "array_distinct(a_a_z_d_e) AS a_z_d",
+            })
+            .unnest(
+                {"x", "a_a_y", "a_a_z", "a_a_y_d_e", "a_a_z_d_e"},
+                {"a_y_d", "a_z_d"})
+            .planNode();
+
+    checkSame(logicalPlanUnnest, referencePlanUnnest);
+  }
+  std::cerr << "3.1 project before unnest\n";
+  {
+    auto logicalPlanUnnest = lp::PlanBuilder{}
+                                 .values({rowVector})
+                                 .project({
+                                     "x + 1 AS x1",
+                                     "array_distinct(a_a_y) AS a_a_y_d",
+                                     "array_distinct(a_a_z) AS a_a_z_d",
+                                 })
+                                 .unnest({
+                                     lp::Col("a_a_y_d").unnestAs("a_y"),
+                                     lp::Col("a_a_z_d").unnestAs("a_z"),
+                                 })
+                                 .build();
+
+    auto referencePlanUnnest =
+        exec::test::PlanBuilder{}
+            .values({rowVector})
+            .project({
+                "x + 1 AS x1",
+                "array_distinct(a_a_y) AS a_a_y_d",
+                "array_distinct(a_a_z) AS a_a_z_d",
+            })
+            .unnest({"x1", "a_a_y_d", "a_a_z_d"}, {"a_a_y_d", "a_a_z_d"})
+            .planNode();
+
+    checkSame(logicalPlanUnnest, referencePlanUnnest);
+  }
+  std::cerr << "3.2 project after unnest (independent on unnested columns)\n";
+  {
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}
+            .values({rowVector})
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
+                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+            })
+            .project({"x + 1 AS x1", "a_y"})
             .build();
 
     auto referencePlanUnnest = exec::test::PlanBuilder{}
                                    .values({rowVector})
-                                   .unnest({"nation"}, {"regions"})
-                                   .project({"nation", "regions_e AS region"})
+                                   .project({
+                                       "x",
+                                       "array_distinct(a_a_y) AS a_a_y_d",
+                                       "array_distinct(a_a_z) AS a_a_z_d",
+                                   })
+                                   .unnest({"x"}, {"a_a_y_d", "a_a_z_d"})
+                                   .project({"x + 1 AS x1", "a_a_y_d_e"})
                                    .planNode();
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  // group by before unnest, project after unnest
+  std::cerr << "3.3 project after unnest (dependent on unnested columns)\n";
+  {
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}
+            .values({rowVector})
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
+                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+            })
+            .project({"x", "array_distinct(a_y) AS a_y_d"})
+            .build();
+
+    auto referencePlanUnnest =
+        exec::test::PlanBuilder{}
+            .values({rowVector})
+            .project({
+                "x",
+                "array_distinct(a_a_y) AS a_a_y_d",
+                "array_distinct(a_a_z) AS a_a_z_d",
+            })
+            .unnest({"x"}, {"a_a_y_d", "a_a_z_d"})
+            .project({"x", "array_distinct(a_a_y_d_e) AS a_y_d"})
+            .planNode();
+
+    checkSame(logicalPlanUnnest, referencePlanUnnest);
+  }
+  std::cerr << "4.1 filter before unnest\n";
+  {
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}
+            .values({rowVector})
+            .filter("x % 2 = 0")
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
+                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+            })
+            .project({"x", "a_y"})
+            .build();
+
+    auto referencePlanUnnest = exec::test::PlanBuilder{}
+                                   .values({rowVector})
+                                   .filter("x % 2 = 0")
+                                   .project({
+                                       "x",
+                                       "array_distinct(a_a_y) AS a_a_y_d",
+                                       "array_distinct(a_a_z) AS a_a_z_d",
+                                   })
+                                   .unnest({"x"}, {"a_a_y_d", "a_a_z_d"})
+                                   .project({"x", "a_a_y_d_e"})
+                                   .planNode();
+
+    checkSame(logicalPlanUnnest, referencePlanUnnest);
+  }
+  std::cerr << "4.2 filter after unnest (independent on unnested columns)\n";
+  {
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}
+            .values({rowVector})
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
+                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+            })
+            .filter("x % 2 = 0")
+            .project({"x", "a_y"})
+            .build();
+
+    auto referencePlanUnnest = exec::test::PlanBuilder{}
+                                   .values({rowVector})
+                                   .project({
+                                       "x",
+                                       "array_distinct(a_a_y) AS a_a_y_d",
+                                       "array_distinct(a_a_z) AS a_a_z_d",
+                                   })
+                                   .unnest({"x"}, {"a_a_y_d", "a_a_z_d"})
+                                   .filter("x % 2 = 0")
+                                   .project({"x", "a_a_y_d_e"})
+                                   .planNode();
+
+    checkSame(logicalPlanUnnest, referencePlanUnnest);
+  }
+  std::cerr << "4.3 filter after unnest (dependent on unnested columns)\n";
+  {
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}
+            .values({rowVector})
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
+                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+            })
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_y")).unnestAs("y"),
+                lp::Call("array_distinct", lp::Col("a_z")).unnestAs("z"),
+            })
+            .filter("y % 2 = 0")
+            .project({"x", "y"})
+            .build();
+
+    auto referencePlanUnnest = exec::test::PlanBuilder{}
+                                   .values({rowVector})
+                                   .project({
+                                       "x",
+                                       "array_distinct(a_a_y) AS a_a_y_d",
+                                       "array_distinct(a_a_z) AS a_a_z_d",
+                                   })
+                                   .unnest({"x"}, {"a_a_y_d", "a_a_z_d"})
+                                   .project({
+                                       "x",
+                                       "array_distinct(a_a_y_d_e) AS a_y",
+                                       "array_distinct(a_a_z_d_e) AS a_z",
+                                   })
+                                   .unnest({"x"}, {"a_y", "a_z"})
+                                   .filter("a_y_e % 2 = 0")
+                                   .project({"x", "a_y_e"})
+                                   .planNode();
+
+    checkSame(logicalPlanUnnest, referencePlanUnnest);
+  }
+  std::cerr << "5.1 group by before unnest\n";
   {
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
             .aggregate(names, {})
-            .unnest({lp::Col("regions").unnestAs("region")})
-            .project({"nation", "region"})
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
+                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+            })
+            .project({"x", "a_y", "a_z"})
             .build();
 
     auto referencePlanUnnest = exec::test::PlanBuilder{}
                                    .values({rowVector})
-                                   .aggregation(names, {}, {}, {}, {})
-                                   .unnest({"nation"}, {"regions"})
-                                   .project({"nation", "regions_e AS region"})
+                                   .singleAggregation(names, {})
+                                   .project({
+                                       "x",
+                                       "array_distinct(a_a_y) AS a_a_y_d",
+                                       "array_distinct(a_a_z) AS a_a_z_d",
+                                   })
+                                   .unnest({"x"}, {"a_a_y_d", "a_a_z_d"})
                                    .planNode();
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  // order by before unnest, project after unnest
+  std::cerr << "5.2 group by after unnest\n";
   {
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
+                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+            })
+            .aggregate({"x", "a_y", "a_z"}, {})
+            .build();
+
+    auto referencePlanUnnest =
+        exec::test::PlanBuilder{}
+            .values({rowVector})
+            .project({
+                "x",
+                "array_distinct(a_a_y) AS a_a_y_d",
+                "array_distinct(a_a_z) AS a_a_z_d",
+            })
+            .unnest({"x"}, {"a_a_y_d", "a_a_z_d"})
+            .singleAggregation({"x", "a_a_y_d_e", "a_a_z_d_e"}, {})
+            .planNode();
+
+    checkSame(logicalPlanUnnest, referencePlanUnnest);
+  }
+  std::cerr << "6.1 order by before unnest\n";
+  { // 6.1 order by before unnest
+
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}
+            .values({rowVector})
             .orderBy(names)
-            .unnest({lp::Col("regions").unnestAs("region")})
-            .project({"nation", "region"})
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
+                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+            })
+            .project({"x", "a_y", "a_z"})
             .build();
 
     auto referencePlanUnnest = exec::test::PlanBuilder{}
                                    .values({rowVector})
                                    .orderBy(names, {})
-                                   .unnest({"nation"}, {"regions"})
-                                   .project({"nation", "regions_e AS region"})
+                                   .project({
+                                       "x",
+                                       "array_distinct(a_a_y) AS a_a_y_d",
+                                       "array_distinct(a_a_z) AS a_a_z_d",
+                                   })
+                                   .unnest({"x"}, {"a_a_y_d", "a_a_z_d"})
                                    .planNode();
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  // limit before unnest, project after unnest
+  std::cerr << "6.2 order by after unnest (independent on unnested columns)\n";
+  {
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}
+            .values({rowVector})
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
+                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+            })
+            .project({"x", "a_y", "a_z"})
+            .orderBy({"x"})
+            .build();
+
+    auto referencePlanUnnest = exec::test::PlanBuilder{}
+                                   .values({rowVector})
+                                   .project({
+                                       "x",
+                                       "array_distinct(a_a_y) AS a_a_y_d",
+                                       "array_distinct(a_a_z) AS a_a_z_d",
+                                   })
+                                   .unnest({"x"}, {"a_a_y_d", "a_a_z_d"})
+                                   .orderBy({"x"}, {})
+                                   .planNode();
+
+    checkSame(logicalPlanUnnest, referencePlanUnnest);
+  }
+  std::cerr << "6.3 order by after unnest (dependent on unnested columns)\n";
+  {
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}
+            .values({rowVector})
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
+                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+            })
+            .project({"x", "a_y", "a_z"})
+            .orderBy({"x", "a_y", "a_z"})
+            .build();
+
+    auto referencePlanUnnest = exec::test::PlanBuilder{}
+                                   .values({rowVector})
+                                   .project({
+                                       "x",
+                                       "array_distinct(a_a_y) AS a_a_y_d",
+                                       "array_distinct(a_a_z) AS a_a_z_d",
+                                   })
+                                   .unnest({"x"}, {"a_a_y_d", "a_a_z_d"})
+                                   .orderBy({"x", "a_a_y_d_e", "a_a_z_d_e"}, {})
+                                   .planNode();
+
+    checkSame(logicalPlanUnnest, referencePlanUnnest);
+  }
+  std::cerr << "7.1 limit before unnest\n";
   {
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
             .limit(1, 1)
-            .unnest({lp::Col("regions").unnestAs("region")})
-            .project({"nation", "region"})
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
+                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+            })
+            .project({"x", "a_y", "a_z"})
             .build();
 
     auto referencePlanUnnest = exec::test::PlanBuilder{}
                                    .values({rowVector})
                                    .limit(1, 1, {})
-                                   .unnest({"nation"}, {"regions"})
-                                   .project({"nation", "regions_e AS region"})
+                                   .project({
+                                       "x",
+                                       "array_distinct(a_a_y) AS a_a_y_d",
+                                       "array_distinct(a_a_z) AS a_a_z_d",
+                                   })
+                                   .unnest({"x"}, {"a_a_y_d", "a_a_z_d"})
                                    .planNode();
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  // expression inside unnest
+  std::cerr << "7.2 limit after unnest\n";
   {
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
-            .unnest({lp::Call("array_distinct", lp::Col("regions"))
-                         .unnestAs("region")})
-            .project({"nation", "region"})
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
+                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+            })
+            .project({"x", "a_y", "a_z"})
+            .limit(1, 1)
             .build();
 
-    auto referencePlanUnnest =
-        exec::test::PlanBuilder{}
-            .values({rowVector})
-            .project({"nation", "array_distinct(regions) AS regions"})
-            .unnest({"nation"}, {"regions"})
-            .project({"nation", "regions_e AS region"})
-            .planNode();
+    auto referencePlanUnnest = exec::test::PlanBuilder{}
+                                   .values({rowVector})
+                                   .project({
+                                       "x",
+                                       "array_distinct(a_a_y) AS a_a_y_d",
+                                       "array_distinct(a_a_z) AS a_a_z_d",
+                                   })
+                                   .unnest({"x"}, {"a_a_y_d", "a_a_z_d"})
+                                   .limit(1, 1, {})
+                                   .planNode();
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  // multiple unnests
+  std::cerr << "8.1 join before unnest (independent on unnested columns)\n";
   {
-    auto logicalPlanUnnest =
-        lp::PlanBuilder{}
-            .values({rowVector})
-            .unnest({lp::Call("array_distinct", lp::Col("regions"))
-                         .unnestAs("distinct_regions")})
-            .unnest({lp::Call("array_distinct", lp::Col("distinct_regions"))
-                         .unnestAs("region")})
-            .project({"nation", "region"})
-            .build();
+    const std::vector<std::string> expectedNames{"x1", "a_y1", "a_z2"};
 
-    auto referencePlanUnnest =
-        exec::test::PlanBuilder{}
-            .values({rowVector})
-            .project({"nation", "array_distinct(regions) AS distinct_regions"})
-            .unnest({"nation"}, {"distinct_regions"})
-            .project(
-                {"nation",
-                 "array_distinct(distinct_regions_e) AS distinct_region"})
-            .unnest({"nation"}, {"distinct_region"})
-            .project({"nation", "distinct_region_e AS region"})
-            .planNode();
-
-    checkSame(logicalPlanUnnest, referencePlanUnnest);
-
-    // check that only needed columns are projected and replicated
-    // names like this because they're autogenerated by the optimizer
-    {
-      auto plan = toSingleNodePlan(logicalPlanUnnest);
-
-      auto matcher =
-          core::PlanMatcherBuilder()
-              .values()
-              .project({"nation", "array_distinct(regions)"})
-              .unnest({"nation"}, {"__r2"})
-              .project({"nation", "array_distinct(distinct_regions)"})
-              .unnest({"nation"}, {"__r2"})
-              .build();
-
-      ASSERT_TRUE(matcher->match(plan));
-
-      std::vector<std::string> expectedNames{"nation", "region"};
-      ASSERT_EQ(plan->outputType()->names(), expectedNames);
-    }
-  }
-  // allow push down joins that don't depend on unnest
-  {
     lp::PlanBuilder::Context ctx;
     auto logicalPlanUnnest =
         lp::PlanBuilder{ctx}
             .values({rowVector})
-            .unnest({lp::Call("array_distinct", lp::Col("regions"))
-                         .unnestAs("distinct_regions")})
-            .unnest({lp::Call("array_distinct", lp::Col("distinct_regions"))
-                         .unnestAs("region")})
-            .project({"nation AS nation1", "region AS region1"})
+            .project({"x AS x1", "a_a_y AS a_a_y1", "a_a_z AS a_a_z1"})
             .join(
                 lp::PlanBuilder{ctx}
                     .values({rowVector})
-                    .unnest({lp::Call("array_distinct", lp::Col("regions"))
-                                 .unnestAs("distinct_regions")})
-                    .unnest(
-                        {lp::Call("array_distinct", lp::Col("distinct_regions"))
-                             .unnestAs("region")})
-                    .project({"nation AS nation2", "region AS region2"}),
-                "nation1 = nation2",
+                    .project({"x AS x2", "a_a_y AS a_a_y2", "a_a_z AS a_a_z2"}),
+                "x1 = x2",
                 lp::JoinType::kInner)
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_a_y1")).unnestAs("a_y1"),
+                lp::Call("array_distinct", lp::Col("a_a_z1")).unnestAs("a_z1"),
+            })
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_a_y2")).unnestAs("a_y2"),
+                lp::Call("array_distinct", lp::Col("a_a_z2")).unnestAs("a_z2"),
+            })
+            .project(expectedNames)
             .build();
     auto plan = toSingleNodePlan(logicalPlanUnnest);
 
     auto matcher = core::PlanMatcherBuilder{}
                        .values()
+                       .hashJoin(core::PlanMatcherBuilder{}.values().build())
+                       .project()
                        .project()
                        .unnest()
                        .project()
                        .unnest()
-                       .hashJoin(core::PlanMatcherBuilder{}
-                                     .values()
-                                     .project()
-                                     .unnest()
-                                     .project()
-                                     .unnest()
-                                     .build())
                        .project()
                        .build();
     ASSERT_TRUE(matcher->match(plan));
-    std::vector<std::string> expectedNames{
-        "nation1", "region1", "nation2", "region2"};
     ASSERT_EQ(plan->outputType()->names(), expectedNames);
   }
-  // doesn't allow push down joins that depend on unnest
+  std::cerr << "8.2 join before unnest (dependent on unnested columns)\n";
   {
+    const std::vector<std::string> expectedNames{"x1", "a_y1", "a_z2"};
+
     lp::PlanBuilder::Context ctx;
     auto logicalPlanUnnest =
         lp::PlanBuilder{ctx}
             .values({rowVector})
-            .unnest({lp::Call("array_distinct", lp::Col("regions"))
-                         .unnestAs("distinct_regions")})
-            .unnest({lp::Call("array_distinct", lp::Col("distinct_regions"))
-                         .unnestAs("region")})
-            .project({"nation AS nation1", "region AS region1"})
+            .project({"x AS x1", "a_a_y AS a_a_y1", "a_a_z AS a_a_z1"})
             .join(
                 lp::PlanBuilder{ctx}
                     .values({rowVector})
-                    .unnest({lp::Call("array_distinct", lp::Col("regions"))
-                                 .unnestAs("distinct_regions")})
-                    .unnest(
-                        {lp::Call("array_distinct", lp::Col("distinct_regions"))
-                             .unnestAs("region")})
-                    .project({"nation AS nation2", "region AS region2"}),
-                "region1 = region2",
+                    .project({"x AS x2", "a_a_y AS a_a_y2", "a_a_z AS a_a_z2"}),
+                "a_a_y1 = a_a_y2",
                 lp::JoinType::kInner)
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_a_y1")).unnestAs("a_y1"),
+                lp::Call("array_distinct", lp::Col("a_a_z1")).unnestAs("a_z1"),
+            })
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_a_y2")).unnestAs("a_y2"),
+                lp::Call("array_distinct", lp::Col("a_a_z2")).unnestAs("a_z2"),
+            })
+            .project(expectedNames)
+            .build();
+    auto plan = toSingleNodePlan(logicalPlanUnnest);
+
+    auto matcher = core::PlanMatcherBuilder{}
+                       .values()
+                       .hashJoin(core::PlanMatcherBuilder{}.values().build())
+                       .project()
+                       .project()
+                       .unnest()
+                       .project()
+                       .unnest()
+                       .project()
+                       .build();
+    ASSERT_TRUE(matcher->match(plan));
+    ASSERT_EQ(plan->outputType()->names(), expectedNames);
+  }
+  std::cerr << "8.3 join after unnest (independent on unnested columns)\n";
+  {
+    const std::vector<std::string> expectedNames{"x1", "a_y1", "a_z2"};
+
+    lp::PlanBuilder::Context ctx;
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{ctx}
+            .values({rowVector})
+            .project({"x AS x1", "a_a_y AS a_a_y1", "a_a_z AS a_a_z1"})
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_a_y1")).unnestAs("a_y1"),
+                lp::Call("array_distinct", lp::Col("a_a_z1")).unnestAs("a_z1"),
+            })
+            .join(
+                lp::PlanBuilder{ctx}
+                    .values({rowVector})
+                    .project({"x AS x2", "a_a_y AS a_a_y2", "a_a_z AS a_a_z2"})
+                    .unnest({
+                        lp::Call("array_distinct", lp::Col("a_a_y2"))
+                            .unnestAs("a_y2"),
+                        lp::Call("array_distinct", lp::Col("a_a_z2"))
+                            .unnestAs("a_z2"),
+                    }),
+                "x1 = x2",
+                lp::JoinType::kInner)
+            .project(expectedNames)
             .build();
     auto plan = toSingleNodePlan(logicalPlanUnnest);
 
@@ -1555,6 +1886,48 @@ TEST_F(PlanTest, unnest) {
                        .project()
                        .unnest()
                        .project()
+                       .hashJoin(core::PlanMatcherBuilder{}
+                                     .values()
+                                     .project()
+                                     .unnest()
+                                     .project()
+                                     .build())
+                       .build();
+    ASSERT_TRUE(matcher->match(plan));
+    ASSERT_EQ(plan->outputType()->names(), expectedNames);
+  }
+  std::cerr << "8.4 join after unnest (dependent on unnested columns)\n";
+  {
+    const std::vector<std::string> expectedNames{"x1", "a_y1", "a_z2"};
+
+    lp::PlanBuilder::Context ctx;
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{ctx}
+            .values({rowVector})
+            .project({"x AS x1", "a_a_y AS a_a_y1", "a_a_z AS a_a_z1"})
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_a_y1")).unnestAs("a_y1"),
+                lp::Call("array_distinct", lp::Col("a_a_z1")).unnestAs("a_z1"),
+            })
+            .join(
+                lp::PlanBuilder{ctx}
+                    .values({rowVector})
+                    .project({"x AS x2", "a_a_y AS a_a_y2", "a_a_z AS a_a_z2"})
+                    .unnest({
+                        lp::Call("array_distinct", lp::Col("a_a_y2"))
+                            .unnestAs("a_y2"),
+                        lp::Call("array_distinct", lp::Col("a_a_z2"))
+                            .unnestAs("a_z2"),
+                    }),
+                "a_a_y1 = a_a_y2",
+                lp::JoinType::kInner)
+            .project(expectedNames)
+            .build();
+    auto plan = toSingleNodePlan(logicalPlanUnnest);
+
+    auto matcher = core::PlanMatcherBuilder{}
+                       .values()
+                       .project()
                        .unnest()
                        .project()
                        .hashJoin(core::PlanMatcherBuilder{}
@@ -1562,14 +1935,41 @@ TEST_F(PlanTest, unnest) {
                                      .project()
                                      .unnest()
                                      .project()
-                                     .unnest()
-                                     .project()
                                      .build())
-                       .project()
                        .build();
     ASSERT_TRUE(matcher->match(plan));
-    std::vector<std::string> expectedNames{
-        "nation1", "region1", "nation2", "region2"};
+    ASSERT_EQ(plan->outputType()->names(), expectedNames);
+  }
+  std::cerr << "9. there's no extra columns in projections before unnest\n";
+  // names like this because they're autogenerated by the optimizer
+  {
+    const std::vector<std::string> expectedNames{"x", "y"};
+
+    auto logicalPlanUnnest =
+        lp::PlanBuilder{}
+            .values({rowVector})
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
+                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+            })
+            .unnest({
+                lp::Call("array_distinct", lp::Col("a_y")).unnestAs("y"),
+                lp::Call("array_distinct", lp::Col("a_z")).unnestAs("z"),
+            })
+            .project(expectedNames)
+            .build();
+    auto plan = toSingleNodePlan(logicalPlanUnnest);
+
+    auto matcher =
+        core::PlanMatcherBuilder()
+            .values()
+            .project({"x", "array_distinct(a_a_y)", "array_distinct(a_a_z)"})
+            .unnest({"x"}, {"__r3", "__r4"})
+            .project({"x", "array_distinct(a_y)", "array_distinct(a_z)"})
+            .unnest({"x"}, {"__r3", "__r4"})
+            .project(expectedNames)
+            .build();
+    ASSERT_TRUE(matcher->match(plan));
     ASSERT_EQ(plan->outputType()->names(), expectedNames);
   }
 }
