@@ -393,10 +393,7 @@ class ToGraph {
       const logical_plan::UnnestNode& unnest,
       int32_t ordinal,
       std::vector<Step>& steps,
-      bool isControl,
-      std::span<const RowType* const> context,
-      std::span<const LogicalContextSource> sources,
-      bool nodePathsWasEmpty);
+      bool isControl);
 
   void markFieldAccessed(
       const logical_plan::AggregateNode& agg,

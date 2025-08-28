@@ -1349,6 +1349,7 @@ TEST_F(PlanTest, unnest) {
   // 6. order by before and after unnest
   // 7. limit before and after unnest
   // 8. join before and after unnest
+  // 9. there's no extra columns in projections before unnest
 
   {
     SCOPED_TRACE("1. unnest");

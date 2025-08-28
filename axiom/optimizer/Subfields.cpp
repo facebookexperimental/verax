@@ -81,31 +81,11 @@ void ToGraph::markFieldAccessed(
     const lp::UnnestNode& unnest,
     int32_t ordinal,
     std::vector<Step>& steps,
-    bool isControl,
-    std::span<const RowType* const> context,
-    std::span<const LogicalContextSource> sources,
-    bool nodePathsWasEmpty) {
+    bool isControl) {
   const auto& input = unnest.onlyInput();
   if (ordinal < input->outputType()->size()) {
-    markFieldAccessed(
-        {.planNode = input.get()}, ordinal, steps, isControl, context, sources);
-  }
-  // We need this to mark all unnest expressions as used, because even
-  // if they're not referenced they still can affect output cardinality.
-  // Also we don't want to call this multiple times for the same unnest.
-  if (nodePathsWasEmpty) {
-    // We need to start unnestSteps from empty, because Unnest operator isn't
-    // projection, so steps after it cannot be pushdown-ed.
-    std::vector<Step> unnestSteps;
-    for (const auto& expr : unnest.unnestExpressions()) {
-      markSubfields(
-          expr,
-          unnestSteps,
-          isControl,
-          std::array{input->outputType().get()},
-          std::array{LogicalContextSource{.planNode = input.get()}});
-      VELOX_DCHECK(unnestSteps.empty());
-    }
+    const auto ctx = fromNode(input);
+    markFieldAccessed(ctx.sources[0], ordinal, steps, isControl, ctx.toCtx());
   }
 }
 
@@ -177,9 +157,7 @@ void ToGraph::markFieldAccessed(
   auto* fields = isControl ? &controlSubfields_ : &payloadSubfields_;
 
   const auto* path = stepsToPath(steps);
-  auto& nodePaths = fields->nodeFields[source.planNode];
-  const bool nodePathsWasEmpty = nodePaths.resultPaths.empty();
-  auto& paths = nodePaths.resultPaths[ordinal];
+  auto& paths = fields->nodeFields[source.planNode].resultPaths[ordinal];
   if (paths.contains(path->id())) {
     // Already marked.
     return;
@@ -195,14 +173,7 @@ void ToGraph::markFieldAccessed(
 
   if (kind == lp::NodeKind::kUnnest) {
     const auto* unnest = source.planNode->asUnchecked<lp::UnnestNode>();
-    markFieldAccessed(
-        *unnest,
-        ordinal,
-        steps,
-        isControl,
-        context,
-        sources,
-        nodePathsWasEmpty);
+    markFieldAccessed(*unnest, ordinal, steps, isControl);
     return;
   }
 
@@ -490,13 +461,17 @@ void ToGraph::markControl(const lp::LogicalPlanNode& node) {
       markSubfields(condition, steps, true, fromNodes(join->inputs()).toCtx());
     }
 
+  } else if (kind == lp::NodeKind::kUnnest) {
+    const auto& unnest = node.asUnchecked<lp::UnnestNode>();
+    markColumnSubfields(node.onlyInput(), unnest->unnestExpressions());
+
   } else if (kind == lp::NodeKind::kFilter) {
     const auto& filter = node.asUnchecked<lp::FilterNode>();
     markColumnSubfields(node.onlyInput(), std::array{filter->predicate()});
 
   } else if (kind == lp::NodeKind::kAggregate) {
-    const auto* agg = node.asUnchecked<lp::AggregateNode>();
-    markColumnSubfields(node.onlyInput(), agg->groupingKeys());
+    const auto& agg = *node.asUnchecked<lp::AggregateNode>();
+    markColumnSubfields(node.onlyInput(), agg.groupingKeys());
 
   } else if (kind == lp::NodeKind::kSort) {
     const auto& order = *node.asUnchecked<lp::SortNode>();
