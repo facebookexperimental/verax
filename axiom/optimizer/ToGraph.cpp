@@ -1682,7 +1682,8 @@ PlanObjectP ToGraph::makeQueryGraph(
     }
 
     case lp::NodeKind::kUnnest: {
-      // Unnest doesn't mixed with Join.
+      // Unnest doesn't mixed with Join, see
+      // https://github.com/facebookexperimental/verax/issues/286
       if (!contains(allowedInDt, PlanType::kUnnestTableNode)) {
         return wrapInDt(node);
       }

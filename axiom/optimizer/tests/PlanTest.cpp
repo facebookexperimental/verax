@@ -1335,11 +1335,11 @@ TEST_F(PlanTest, unnest) {
               "[[2, 1], [1, 2]]",
           }),
       });
-  // We need to test following cases:
-  //  If something after unnest
-  //  it can depend and and not depend on unnested columns.
-  //  And we should also check that any expressions allowed inside unnest,
-  //  not only input column reference.
+  // We need to test the following cases:
+  //  If something is after unnest
+  //  it can depend and not depend on unnested columns.
+  //  And we should also check that any expressions are allowed inside unnest,
+  //  not only input column references.
   // 1. unnest
   // 2. unnest after unnest
   // 3. project before and after unnest
@@ -1350,14 +1350,15 @@ TEST_F(PlanTest, unnest) {
   // 7. limit before and after unnest
   // 8. join before and after unnest
 
-  std::cerr << "1. unnest\n";
   {
+    SCOPED_TRACE("1. unnest");
+
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
-                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+                lp::Sql("array_distinct(a_a_y)").unnestAs("a_y"),
+                lp::Sql("array_distinct(a_a_z)").unnestAs("a_z"),
             })
             .build();
 
@@ -1376,18 +1377,19 @@ TEST_F(PlanTest, unnest) {
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  std::cerr << "2. unnest after unnest\n";
   {
+    SCOPED_TRACE("2. unnest after unnest");
+
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
-                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+                lp::Sql("array_distinct(a_a_y)").unnestAs("a_y"),
+                lp::Sql("array_distinct(a_a_z)").unnestAs("a_z"),
             })
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_y")).unnestAs("y"),
-                lp::Call("array_distinct", lp::Col("a_z")).unnestAs("z"),
+                lp::Sql("array_distinct(a_y)").unnestAs("y"),
+                lp::Sql("array_distinct(a_z)").unnestAs("z"),
             })
             .build();
 
@@ -1418,8 +1420,9 @@ TEST_F(PlanTest, unnest) {
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  std::cerr << "3.1 project before unnest\n";
   {
+    SCOPED_TRACE("3.1 project before unnest");
+
     auto logicalPlanUnnest = lp::PlanBuilder{}
                                  .values({rowVector})
                                  .project({
@@ -1446,14 +1449,15 @@ TEST_F(PlanTest, unnest) {
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  std::cerr << "3.2 project after unnest (independent on unnested columns)\n";
   {
+    SCOPED_TRACE("3.2 project after unnest (independent on unnested columns)");
+
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
-                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+                lp::Sql("array_distinct(a_a_y)").unnestAs("a_y"),
+                lp::Sql("array_distinct(a_a_z)").unnestAs("a_z"),
             })
             .project({"x + 1 AS x1", "a_y"})
             .build();
@@ -1471,14 +1475,15 @@ TEST_F(PlanTest, unnest) {
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  std::cerr << "3.3 project after unnest (dependent on unnested columns)\n";
   {
+    SCOPED_TRACE("3.3 project after unnest (dependent on unnested columns)");
+
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
-                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+                lp::Sql("array_distinct(a_a_y)").unnestAs("a_y"),
+                lp::Sql("array_distinct(a_a_z)").unnestAs("a_z"),
             })
             .project({"x", "array_distinct(a_y) AS a_y_d"})
             .build();
@@ -1497,15 +1502,16 @@ TEST_F(PlanTest, unnest) {
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  std::cerr << "4.1 filter before unnest\n";
   {
+    SCOPED_TRACE("4.1 filter before unnest");
+
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
             .filter("x % 2 = 0")
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
-                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+                lp::Sql("array_distinct(a_a_y)").unnestAs("a_y"),
+                lp::Sql("array_distinct(a_a_z)").unnestAs("a_z"),
             })
             .project({"x", "a_y"})
             .build();
@@ -1524,14 +1530,15 @@ TEST_F(PlanTest, unnest) {
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  std::cerr << "4.2 filter after unnest (independent on unnested columns)\n";
   {
+    SCOPED_TRACE("4.2 filter after unnest (independent on unnested columns)");
+
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
-                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+                lp::Sql("array_distinct(a_a_y)").unnestAs("a_y"),
+                lp::Sql("array_distinct(a_a_z)").unnestAs("a_z"),
             })
             .filter("x % 2 = 0")
             .project({"x", "a_y"})
@@ -1551,18 +1558,19 @@ TEST_F(PlanTest, unnest) {
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  std::cerr << "4.3 filter after unnest (dependent on unnested columns)\n";
   {
+    SCOPED_TRACE("4.3 filter after unnest (dependent on unnested columns)");
+
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
-                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+                lp::Sql("array_distinct(a_a_y)").unnestAs("a_y"),
+                lp::Sql("array_distinct(a_a_z)").unnestAs("a_z"),
             })
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_y")).unnestAs("y"),
-                lp::Call("array_distinct", lp::Col("a_z")).unnestAs("z"),
+                lp::Sql("array_distinct(a_y)").unnestAs("y"),
+                lp::Sql("array_distinct(a_z)").unnestAs("z"),
             })
             .filter("y % 2 = 0")
             .project({"x", "y"})
@@ -1588,15 +1596,16 @@ TEST_F(PlanTest, unnest) {
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  std::cerr << "5.1 group by before unnest\n";
   {
+    SCOPED_TRACE("5.1 group by before unnest");
+
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
             .aggregate(names, {})
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
-                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+                lp::Sql("array_distinct(a_a_y)").unnestAs("a_y"),
+                lp::Sql("array_distinct(a_a_z)").unnestAs("a_z"),
             })
             .project({"x", "a_y", "a_z"})
             .build();
@@ -1614,14 +1623,15 @@ TEST_F(PlanTest, unnest) {
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  std::cerr << "5.2 group by after unnest\n";
   {
+    SCOPED_TRACE("5.2 group by after unnest");
+
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
-                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+                lp::Sql("array_distinct(a_a_y)").unnestAs("a_y"),
+                lp::Sql("array_distinct(a_a_z)").unnestAs("a_z"),
             })
             .aggregate({"x", "a_y", "a_z"}, {})
             .build();
@@ -1640,16 +1650,16 @@ TEST_F(PlanTest, unnest) {
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  std::cerr << "6.1 order by before unnest\n";
-  { // 6.1 order by before unnest
+  {
+    SCOPED_TRACE("6.1 order by before unnest");
 
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
             .orderBy(names)
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
-                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+                lp::Sql("array_distinct(a_a_y)").unnestAs("a_y"),
+                lp::Sql("array_distinct(a_a_z)").unnestAs("a_z"),
             })
             .project({"x", "a_y", "a_z"})
             .build();
@@ -1667,14 +1677,15 @@ TEST_F(PlanTest, unnest) {
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  std::cerr << "6.2 order by after unnest (independent on unnested columns)\n";
   {
+    SCOPED_TRACE("6.2 order by after unnest (independent on unnested columns)");
+
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
-                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+                lp::Sql("array_distinct(a_a_y)").unnestAs("a_y"),
+                lp::Sql("array_distinct(a_a_z)").unnestAs("a_z"),
             })
             .project({"x", "a_y", "a_z"})
             .orderBy({"x"})
@@ -1693,14 +1704,15 @@ TEST_F(PlanTest, unnest) {
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  std::cerr << "6.3 order by after unnest (dependent on unnested columns)\n";
   {
+    SCOPED_TRACE("6.3 order by after unnest (dependent on unnested columns)");
+
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
-                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+                lp::Sql("array_distinct(a_a_y)").unnestAs("a_y"),
+                lp::Sql("array_distinct(a_a_z)").unnestAs("a_z"),
             })
             .project({"x", "a_y", "a_z"})
             .orderBy({"x", "a_y", "a_z"})
@@ -1719,15 +1731,16 @@ TEST_F(PlanTest, unnest) {
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  std::cerr << "7.1 limit before unnest\n";
   {
+    SCOPED_TRACE("7.1 limit before unnest");
+
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
             .limit(1, 1)
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
-                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+                lp::Sql("array_distinct(a_a_y)").unnestAs("a_y"),
+                lp::Sql("array_distinct(a_a_z)").unnestAs("a_z"),
             })
             .project({"x", "a_y", "a_z"})
             .build();
@@ -1745,14 +1758,15 @@ TEST_F(PlanTest, unnest) {
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  std::cerr << "7.2 limit after unnest\n";
   {
+    SCOPED_TRACE("7.2 limit after unnest");
+
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
-                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+                lp::Sql("array_distinct(a_a_y)").unnestAs("a_y"),
+                lp::Sql("array_distinct(a_a_z)").unnestAs("a_z"),
             })
             .project({"x", "a_y", "a_z"})
             .limit(1, 1)
@@ -1771,8 +1785,9 @@ TEST_F(PlanTest, unnest) {
 
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
-  std::cerr << "8.1 join before unnest (independent on unnested columns)\n";
   {
+    SCOPED_TRACE("8.1 join before unnest (independent on unnested columns)");
+
     const std::vector<std::string> expectedNames{"x1", "a_y1", "a_z2"};
 
     lp::PlanBuilder::Context ctx;
@@ -1787,12 +1802,12 @@ TEST_F(PlanTest, unnest) {
                 "x1 = x2",
                 lp::JoinType::kInner)
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_a_y1")).unnestAs("a_y1"),
-                lp::Call("array_distinct", lp::Col("a_a_z1")).unnestAs("a_z1"),
+                lp::Sql("array_distinct(a_a_y1)").unnestAs("a_y1"),
+                lp::Sql("array_distinct(a_a_z1)").unnestAs("a_z1"),
             })
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_a_y2")).unnestAs("a_y2"),
-                lp::Call("array_distinct", lp::Col("a_a_z2")).unnestAs("a_z2"),
+                lp::Sql("array_distinct(a_a_y2)").unnestAs("a_y2"),
+                lp::Sql("array_distinct(a_a_z2)").unnestAs("a_z2"),
             })
             .project(expectedNames)
             .build();
@@ -1811,8 +1826,9 @@ TEST_F(PlanTest, unnest) {
     ASSERT_TRUE(matcher->match(plan));
     ASSERT_EQ(plan->outputType()->names(), expectedNames);
   }
-  std::cerr << "8.2 join before unnest (dependent on unnested columns)\n";
   {
+    SCOPED_TRACE("8.2 join before unnest (dependent on unnested columns)");
+
     const std::vector<std::string> expectedNames{"x1", "a_y1", "a_z2"};
 
     lp::PlanBuilder::Context ctx;
@@ -1827,12 +1843,12 @@ TEST_F(PlanTest, unnest) {
                 "a_a_y1 = a_a_y2",
                 lp::JoinType::kInner)
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_a_y1")).unnestAs("a_y1"),
-                lp::Call("array_distinct", lp::Col("a_a_z1")).unnestAs("a_z1"),
+                lp::Sql("array_distinct(a_a_y1)").unnestAs("a_y1"),
+                lp::Sql("array_distinct(a_a_z1)").unnestAs("a_z1"),
             })
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_a_y2")).unnestAs("a_y2"),
-                lp::Call("array_distinct", lp::Col("a_a_z2")).unnestAs("a_z2"),
+                lp::Sql("array_distinct(a_a_y2)").unnestAs("a_y2"),
+                lp::Sql("array_distinct(a_a_z2)").unnestAs("a_z2"),
             })
             .project(expectedNames)
             .build();
@@ -1851,8 +1867,9 @@ TEST_F(PlanTest, unnest) {
     ASSERT_TRUE(matcher->match(plan));
     ASSERT_EQ(plan->outputType()->names(), expectedNames);
   }
-  std::cerr << "8.3 join after unnest (independent on unnested columns)\n";
   {
+    SCOPED_TRACE("8.3 join after unnest (independent on unnested columns)");
+
     const std::vector<std::string> expectedNames{"x1", "a_y1", "a_z2"};
 
     lp::PlanBuilder::Context ctx;
@@ -1861,18 +1878,16 @@ TEST_F(PlanTest, unnest) {
             .values({rowVector})
             .project({"x AS x1", "a_a_y AS a_a_y1", "a_a_z AS a_a_z1"})
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_a_y1")).unnestAs("a_y1"),
-                lp::Call("array_distinct", lp::Col("a_a_z1")).unnestAs("a_z1"),
+                lp::Sql("array_distinct(a_a_y1)").unnestAs("a_y1"),
+                lp::Sql("array_distinct(a_a_z1)").unnestAs("a_z1"),
             })
             .join(
                 lp::PlanBuilder{ctx}
                     .values({rowVector})
                     .project({"x AS x2", "a_a_y AS a_a_y2", "a_a_z AS a_a_z2"})
                     .unnest({
-                        lp::Call("array_distinct", lp::Col("a_a_y2"))
-                            .unnestAs("a_y2"),
-                        lp::Call("array_distinct", lp::Col("a_a_z2"))
-                            .unnestAs("a_z2"),
+                        lp::Sql("array_distinct(a_a_y2)").unnestAs("a_y2"),
+                        lp::Sql("array_distinct(a_a_z2)").unnestAs("a_z2"),
                     }),
                 "x1 = x2",
                 lp::JoinType::kInner)
@@ -1895,8 +1910,9 @@ TEST_F(PlanTest, unnest) {
     ASSERT_TRUE(matcher->match(plan));
     ASSERT_EQ(plan->outputType()->names(), expectedNames);
   }
-  std::cerr << "8.4 join after unnest (dependent on unnested columns)\n";
   {
+    SCOPED_TRACE("8.4 join after unnest (dependent on unnested columns)");
+
     const std::vector<std::string> expectedNames{"x1", "a_y1", "a_z2"};
 
     lp::PlanBuilder::Context ctx;
@@ -1905,18 +1921,16 @@ TEST_F(PlanTest, unnest) {
             .values({rowVector})
             .project({"x AS x1", "a_a_y AS a_a_y1", "a_a_z AS a_a_z1"})
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_a_y1")).unnestAs("a_y1"),
-                lp::Call("array_distinct", lp::Col("a_a_z1")).unnestAs("a_z1"),
+                lp::Sql("array_distinct(a_a_y1)").unnestAs("a_y1"),
+                lp::Sql("array_distinct(a_a_z1)").unnestAs("a_z1"),
             })
             .join(
                 lp::PlanBuilder{ctx}
                     .values({rowVector})
                     .project({"x AS x2", "a_a_y AS a_a_y2", "a_a_z AS a_a_z2"})
                     .unnest({
-                        lp::Call("array_distinct", lp::Col("a_a_y2"))
-                            .unnestAs("a_y2"),
-                        lp::Call("array_distinct", lp::Col("a_a_z2"))
-                            .unnestAs("a_z2"),
+                        lp::Sql("array_distinct(a_a_y2)").unnestAs("a_y2"),
+                        lp::Sql("array_distinct(a_a_z2)").unnestAs("a_z2"),
                     }),
                 "a_a_y1 = a_a_y2",
                 lp::JoinType::kInner)
@@ -1939,26 +1953,27 @@ TEST_F(PlanTest, unnest) {
     ASSERT_TRUE(matcher->match(plan));
     ASSERT_EQ(plan->outputType()->names(), expectedNames);
   }
-  std::cerr << "9. there's no extra columns in projections before unnest\n";
-  // names like this because they're autogenerated by the optimizer
   {
+    SCOPED_TRACE("9. there's no extra columns in projections before unnest");
+
     const std::vector<std::string> expectedNames{"x", "y"};
 
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
             .values({rowVector})
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_a_y")).unnestAs("a_y"),
-                lp::Call("array_distinct", lp::Col("a_a_z")).unnestAs("a_z"),
+                lp::Sql("array_distinct(a_a_y)").unnestAs("a_y"),
+                lp::Sql("array_distinct(a_a_z)").unnestAs("a_z"),
             })
             .unnest({
-                lp::Call("array_distinct", lp::Col("a_y")).unnestAs("y"),
-                lp::Call("array_distinct", lp::Col("a_z")).unnestAs("z"),
+                lp::Sql("array_distinct(a_y)").unnestAs("y"),
+                lp::Sql("array_distinct(a_z)").unnestAs("z"),
             })
             .project(expectedNames)
             .build();
     auto plan = toSingleNodePlan(logicalPlanUnnest);
 
+    // names like this because they're autogenerated by the optimizer
     auto matcher =
         core::PlanMatcherBuilder()
             .values()

@@ -177,10 +177,9 @@ void ToGraph::markFieldAccessed(
   auto* fields = isControl ? &controlSubfields_ : &payloadSubfields_;
 
   const auto* path = stepsToPath(steps);
-  const auto& nodePaths = fields->nodeFields[source.planNode];
-  const bool nodePathsWasEmpty =
-      fields->nodeFields[source.planNode].resultPaths.empty();
-  auto& paths = fields->nodeFields[source.planNode].resultPaths[ordinal];
+  auto& nodePaths = fields->nodeFields[source.planNode];
+  const bool nodePathsWasEmpty = nodePaths.resultPaths.empty();
+  auto& paths = nodePaths.resultPaths[ordinal];
   if (paths.contains(path->id())) {
     // Already marked.
     return;

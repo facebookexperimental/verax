@@ -571,6 +571,8 @@ class JoinEdge {
     return rightTable_;
   }
 
+  // This method should be removed, see
+  // https://github.com/facebookexperimental/verax/issues/298
   void setKeys(ExprVector keys) {
     leftKeys_ = keys;
     rightKeys_ = std::move(keys);
