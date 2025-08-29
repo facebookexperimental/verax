@@ -34,6 +34,7 @@ enum class PlanType {
   // Plan nodes.
   kTableNode,
   kValuesTableNode,
+  kUnnestTableNode,
   kDerivedTableNode,
   kAggregationNode,
   kProjectNode,

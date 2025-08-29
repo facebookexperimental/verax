@@ -545,7 +545,8 @@ class JoinEdge {
         markColumn_(spec.markColumn),
         directed_(spec.directed) {
     VELOX_CHECK_NOT_NULL(rightTable);
-    VELOX_CHECK(directed_ || filter_.empty() || !isInner());
+    // filter_ is only for non-inner joins.
+    VELOX_CHECK(filter_.empty() || !isInner());
   }
 
   static JoinEdge* makeInner(PlanObjectCP leftTable, PlanObjectCP rightTable) {
@@ -560,6 +561,19 @@ class JoinEdge {
       PlanObjectCP leftTable,
       PlanObjectCP rightTable) {
     return make<JoinEdge>(leftTable, rightTable, Spec{.rightNotExists = true});
+  }
+
+  static JoinEdge* makeUnnest(
+      PlanObjectCP leftTable,
+      PlanObjectCP rightTable,
+      ExprVector unnestExprs) {
+    auto* edge = make<JoinEdge>(leftTable, rightTable, Spec{.directed = true});
+    // We should use only leftKeys_, see
+    // https://github.com/facebookexperimental/verax/issues/298
+    edge->leftKeys_ = unnestExprs;
+    edge->rightKeys_ = std::move(unnestExprs);
+    edge->setFanouts(1, 1);
+    return edge;
   }
 
   PlanObjectCP leftTable() const {
@@ -811,6 +825,33 @@ struct ValuesTable : public PlanObject {
 
   float cardinality() const {
     return values.cardinality();
+  }
+
+  bool isTable() const override {
+    return true;
+  }
+
+  void addJoinedBy(JoinEdgeP join);
+
+  std::string toString() const override;
+};
+
+struct UnnestTable : public PlanObject {
+  explicit UnnestTable() : PlanObject{PlanType::kUnnestTableNode} {}
+
+  // Correlation name, distinguishes between uses of the same unnest node.
+  Name cname{nullptr};
+
+  /// All unnested columns from corresponding unnest node.
+  /// All replicated columns is on other (left) side of the join edge.
+  ColumnVector columns;
+
+  // All joins where 'this' is an end point.
+  JoinEdgeVector joinedBy;
+
+  float cardinality() const {
+    // TODO: Should be changed later to actual cardinality
+    return 1;
   }
 
   bool isTable() const override {

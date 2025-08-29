@@ -477,18 +477,23 @@ namespace {
 // related functions.
 class TempProjections {
  public:
-  TempProjections(ToVelox& tv, const RelationOp& input)
+  TempProjections(
+      ToVelox& tv,
+      const RelationOp& input,
+      bool useAllColumns = true)
       : toVelox_(tv), input_(input) {
     exprChannel_.reserve(input_.columns().size());
     names_.reserve(input_.columns().size());
     exprs_.reserve(input_.columns().size());
     fieldRefs_.reserve(input_.columns().size());
     for (const auto& column : input_.columns()) {
-      auto [it, emplaced] = exprChannel_.emplace(column, nextChannel_);
+      auto [it, emplaced] =
+          exprChannel_.emplace(column, Channel{nextChannel_, useAllColumns});
       if (!emplaced) {
         continue;
       }
       ++nextChannel_;
+      usedChannel_ += useAllColumns ? 1 : 0;
       names_.push_back(ToVelox::outputName(column));
       auto fieldRef = std::make_shared<core::FieldAccessTypedExpr>(
           toTypePtr(column->value().type), names_.back());
@@ -500,10 +505,12 @@ class TempProjections {
   core::FieldAccessTypedExprPtr toFieldRef(
       ExprCP expr,
       const std::string* optName = nullptr) {
-    auto [it, emplaced] = exprChannel_.emplace(expr, nextChannel_);
+    auto [it, emplaced] =
+        exprChannel_.emplace(expr, Channel{nextChannel_, true});
     if (emplaced) {
       VELOX_CHECK(expr->type() != PlanType::kColumnExpr);
       ++nextChannel_;
+      ++usedChannel_;
       exprs_.push_back(queryCtx()->optimization()->toTypedExpr(expr));
       names_.push_back(
           optName ? *optName : fmt::format("__r{}", nextChannel_ - 1));
@@ -511,22 +518,25 @@ class TempProjections {
           toTypePtr(expr->value().type), names_.back()));
       return fieldRefs_.back();
     }
-    auto fieldRef = fieldRefs_[it->second];
+    usedChannel_ += it->second.used ? 0 : 1;
+    it->second.used = true;
+    auto fieldRef = fieldRefs_[it->second.idx];
     if (optName && *optName != fieldRef->name()) {
       auto aliasFieldRef = std::make_shared<core::FieldAccessTypedExpr>(
           toTypePtr(expr->value().type), *optName);
       names_.push_back(*optName);
       exprs_.push_back(fieldRef);
       fieldRefs_.push_back(aliasFieldRef);
-      exprChannel_[expr] = nextChannel_++;
+      exprChannel_[expr] = {nextChannel_++, true};
+      ++usedChannel_;
       return aliasFieldRef;
     }
     return fieldRef;
   }
 
-  template <typename Result = core::FieldAccessTypedExprPtr>
+  template <typename Result = core::FieldAccessTypedExprPtr, typename Container>
   std::vector<Result> toFieldRefs(
-      const ExprVector& exprs,
+      const Container& exprs,
       const std::vector<std::string>* optNames = nullptr) {
     std::vector<Result> result;
     result.reserve(exprs.size());
@@ -538,8 +548,28 @@ class TempProjections {
   }
 
   core::PlanNodePtr maybeProject(core::PlanNodePtr inputNode) && {
+    VELOX_DCHECK_LE(usedChannel_, nextChannel_);
     if (nextChannel_ == input_.columns().size()) {
+      // TODO: Maybe for some plans we want to reduce projections
+      // if usedChannel_ < nextChannel_
       return inputNode;
+    }
+    const auto notNeededChannels = nextChannel_ - usedChannel_;
+    if (notNeededChannels != 0) {
+      std::unordered_set<uint32_t> unusedChannels;
+      unusedChannels.reserve(notNeededChannels);
+      for (const auto& expr : exprChannel_) {
+        if (!expr.second.used) {
+          unusedChannels.emplace(expr.second.idx);
+        }
+      }
+      VELOX_DCHECK_EQ(notNeededChannels, unusedChannels.size());
+      std::erase_if(names_, [&, i = uint32_t{0}](const auto&) mutable {
+        return unusedChannels.contains(i++);
+      });
+      std::erase_if(exprs_, [&, i = uint32_t{0}](const auto&) mutable {
+        return unusedChannels.contains(i++);
+      });
     }
 
     return std::make_shared<core::ProjectNode>(
@@ -549,11 +579,16 @@ class TempProjections {
  private:
   ToVelox& toVelox_;
   const RelationOp& input_;
+  uint32_t usedChannel_{0};
   uint32_t nextChannel_{0};
   std::vector<core::FieldAccessTypedExprPtr> fieldRefs_;
   std::vector<std::string> names_;
   std::vector<core::TypedExprPtr> exprs_;
-  std::unordered_map<ExprCP, uint32_t> exprChannel_;
+  struct Channel {
+    uint32_t idx = 0;
+    bool used = false;
+  };
+  std::unordered_map<ExprCP, Channel> exprChannel_;
 };
 } // namespace
 
@@ -1128,22 +1163,29 @@ velox::core::PlanNodePtr ToVelox::makeProject(
     }
   }
 
-  bool redundant = true;
-  for (auto i = 0; i < project.exprs().size(); ++i) {
-    auto expr = project.exprs()[i];
-    if (expr->type() != PlanType::kColumnExpr) {
-      redundant = false;
-      break;
-    }
+  const auto& inputType = *input->outputType();
+  const auto outputTypeSize = project.exprs().size();
+  VELOX_DCHECK_EQ(project.columns().size(), outputTypeSize);
 
-    auto column = project.columns()[i];
-
-    // TODO Why expr->sameOrEquals(*column) doesn't work?
-    if (input->outputType()->nameOf(i) != outputName(column)) {
-      redundant = false;
-      break;
+  const bool redundant = [&] {
+    if (inputType.size() != outputTypeSize) {
+      // TODO: Maybe for some plans, if this projection isn't last node
+      // we don't want to reduce projections
+      return false;
     }
-  }
+    for (size_t i = 0; i < outputTypeSize; ++i) {
+      const auto* expr = project.exprs()[i];
+      if (expr->type() != PlanType::kColumnExpr) {
+        return false;
+      }
+      const auto* column = project.columns()[i];
+      // TODO Why expr->sameOrEquals(*column) doesn't work?
+      if (inputType.nameOf(i) != outputName(column)) {
+        return false;
+      }
+    }
+    return true;
+  }();
 
   if (redundant) {
     return input;
@@ -1151,14 +1193,16 @@ velox::core::PlanNodePtr ToVelox::makeProject(
 
   std::vector<std::string> names;
   std::vector<core::TypedExprPtr> exprs;
-  for (auto i = 0; i < project.exprs().size(); ++i) {
-    auto column = project.columns()[i];
+  names.reserve(outputTypeSize);
+  exprs.reserve(outputTypeSize);
+  for (auto i = 0; i < outputTypeSize; ++i) {
+    const auto* column = project.columns()[i];
     names.push_back(outputName(column));
     exprs.push_back(toTypedExpr(project.exprs()[i]));
   }
 
   return std::make_shared<core::ProjectNode>(
-      nextId(), std::move(names), std::move(exprs), input);
+      nextId(), std::move(names), std::move(exprs), std::move(input));
 }
 
 velox::core::PlanNodePtr ToVelox::makeJoin(
@@ -1202,6 +1246,35 @@ velox::core::PlanNodePtr ToVelox::makeJoin(
   return joinNode;
 }
 
+core::PlanNodePtr ToVelox::makeUnnest(
+    const Unnest& op,
+    ExecutableFragment& fragment,
+    std::vector<ExecutableFragment>& stages) {
+  auto input = makeFragment(op.input(), fragment, stages);
+
+  // We avoid use all of the input columns in the projections
+  // because the unnest op explicitly specify what columns to replicate
+  TempProjections projections{*this, *op.input(), false};
+  auto replicateVariables = projections.toFieldRefs(op.replicateColumns);
+  auto unnestVariables = projections.toFieldRefs(op.unnestExprs);
+  auto project = std::move(projections).maybeProject(std::move(input));
+
+  std::vector<std::string> unnestNames;
+  unnestNames.reserve(op.unnestedColumns.size());
+  for (const auto* column : op.unnestedColumns) {
+    unnestNames.emplace_back(outputName(column));
+  }
+
+  return std::make_shared<core::UnnestNode>(
+      nextId(),
+      std::move(replicateVariables),
+      std::move(unnestVariables),
+      std::move(unnestNames),
+      std::nullopt,
+      std::nullopt,
+      std::move(project));
+}
+
 core::PlanNodePtr ToVelox::makeAggregation(
     const Aggregation& op,
     ExecutableFragment& fragment,
@@ -1212,7 +1285,7 @@ core::PlanNodePtr ToVelox::makeAggregation(
       op.step == core::AggregationNode::Step::kSingle;
   const int32_t numKeys = op.groupingKeys.size();
 
-  TempProjections projections(*this, *op.input());
+  TempProjections projections{*this, *op.input(), false};
   std::vector<std::string> aggregateNames;
   std::vector<core::AggregationNode::Aggregate> aggregates;
   for (auto i = 0; i < op.aggregates.size(); ++i) {
@@ -1466,6 +1539,8 @@ core::PlanNodePtr ToVelox::makeFragment(
       return makeUnionAll(*op->as<UnionAll>(), fragment, stages);
     case RelType::kValues:
       return makeValues(*op->as<Values>(), fragment);
+    case RelType::kUnnest:
+      return makeUnnest(*op->as<Unnest>(), fragment, stages);
     default:
       VELOX_FAIL(
           "Unsupported RelationOp {}", static_cast<int32_t>(op->relType()));

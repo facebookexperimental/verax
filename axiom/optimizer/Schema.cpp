@@ -156,6 +156,8 @@ float tableCardinality(PlanObjectCP table) {
         ->table->cardinality;
   } else if (table->is(PlanType::kValuesTableNode)) {
     return table->as<ValuesTable>()->cardinality();
+  } else if (table->is(PlanType::kUnnestTableNode)) {
+    return table->as<UnnestTable>()->cardinality();
   }
   VELOX_CHECK(table->is(PlanType::kDerivedTableNode));
   return table->as<DerivedTable>()->cardinality;
@@ -334,6 +336,11 @@ IndexInfo joinCardinality(PlanObjectCP table, CPSpan<Column> keys) {
   if (table->is(PlanType::kValuesTableNode)) {
     const auto* valuesTable = table->as<ValuesTable>();
     computeCardinalities(valuesTable->cardinality());
+    return result;
+  }
+  if (table->is(PlanType::kUnnestTableNode)) {
+    const auto* unnestTable = table->as<UnnestTable>();
+    computeCardinalities(unnestTable->cardinality());
     return result;
   }
   VELOX_CHECK(table->is(PlanType::kDerivedTableNode));

@@ -610,8 +610,7 @@ using SetNodePtr = std::shared_ptr<const SetNode>;
 /// optional ordinality column of type BIGINT.
 class UnnestNode : public LogicalPlanNode {
  public:
-  /// @param input Optional input node. If not specified, 'unnestExpressions'
-  /// must be constant expressions.
+  /// @param input Input node.
   /// @param unnestExpressions One or more expressions that produce ARRAYs
   /// or MAPs.
   /// @param unnestedNames Names to use for expanded relations. Must align
@@ -631,8 +630,7 @@ class UnnestNode : public LogicalPlanNode {
       : LogicalPlanNode(
             NodeKind::kUnnest,
             id,
-            input == nullptr ? std::vector<LogicalPlanNodePtr>{}
-                             : std::vector<LogicalPlanNodePtr>{input},
+            {input},
             makeOutputType(
                 input,
                 unnestExpressions,

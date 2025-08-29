@@ -243,7 +243,8 @@ void ToGraph::getExprForField(
       const auto* relation = resultColumn->relation();
       VELOX_CHECK_NOT_NULL(relation);
       if (relation->is(PlanType::kTableNode) ||
-          relation->is(PlanType::kValuesTableNode)) {
+          relation->is(PlanType::kValuesTableNode) ||
+          relation->is(PlanType::kUnnestTableNode)) {
         VELOX_CHECK(leaf == relation);
       }
       return;
@@ -846,6 +847,56 @@ ExprVector ToGraph::translateColumns(const std::vector<lp::ExprPtr>& source) {
     result[i] = translateExpr(source[i]); // NOLINT
   }
   return result;
+}
+
+void ToGraph::translateUnnest(const lp::UnnestNode& unnest) {
+  if (unnest.ordinalityName().has_value()) {
+    VELOX_NYI(
+        "Unnest ordinality column is not supported in Verax optimizer. Unnest node: {}",
+        unnest.id());
+  }
+  PlanObjectCP leftTable = nullptr;
+  ExprVector unnestExprs;
+  unnestExprs.reserve(unnest.unnestExpressions().size());
+  float maxCardinality = 0;
+  for (size_t i = 0; i < unnest.unnestExpressions().size(); ++i) {
+    const auto* unnestExpr = translateExpr(unnest.unnestExpressions()[i]);
+    unnestExprs.push_back(unnestExpr);
+    if (i == 0) {
+      leftTable = unnestExpr->singleTable();
+    } else if (leftTable && leftTable != unnestExpr->singleTable()) {
+      leftTable = nullptr;
+    }
+    maxCardinality = std::max(maxCardinality, unnestExpr->value().cardinality);
+  }
+
+  auto* unnestTable = make<UnnestTable>();
+  unnestTable->cname = newCName("ut");
+  unnestTable->columns.reserve(
+      unnest.outputType()->size() - unnest.onlyInput()->outputType()->size());
+  for (size_t i = 0; i < unnestExprs.size(); ++i) {
+    const auto* unnestExpr = unnestExprs[i];
+    const auto& unnestedNames = unnest.unnestedNames()[i];
+    for (size_t j = 0; j < unnestedNames.size(); ++j) {
+      const auto* unnestedType = unnestExpr->value().type->childAt(j).get();
+      // TODO: Value cardinality also should be multiplied by the max from all
+      // columns average expected number of elements per unnested element.
+      // Other Value properties also should be computed.
+      Value value{unnestedType, maxCardinality};
+      const auto* columnName = toName(unnestedNames[j]);
+      auto* column = make<Column>(columnName, unnestTable, value, columnName);
+      unnestTable->columns.push_back(column);
+      renames_[columnName] = column;
+    }
+  }
+
+  auto* edge =
+      JoinEdge::makeUnnest(leftTable, unnestTable, std::move(unnestExprs));
+
+  planLeaves_[&unnest] = unnestTable;
+  currentDt_->tables.push_back(unnestTable);
+  currentDt_->tableSet.add(unnestTable);
+  currentDt_->joins.push_back(edge);
 }
 
 AggregationPlanCP ToGraph::translateAggregation(
@@ -1628,7 +1679,28 @@ PlanObjectP ToGraph::makeQueryGraph(
       currentDt_->tableSet.add(setDt);
       return currentDt_;
     }
-    case lp::NodeKind::kUnnest:
+
+    case lp::NodeKind::kUnnest: {
+      // Unnest doesn't mixed with Join, see
+      // https://github.com/facebookexperimental/verax/issues/286
+      if (!contains(allowedInDt, PlanType::kUnnestTableNode)) {
+        return wrapInDt(node);
+      }
+
+      // Multiple unnest is allowed in a DT.
+      // If arrives after groupBy, orderBy, limit, then starts a new DT.
+      makeQueryGraph(
+          *node.onlyInput(), makeDtIf(allowedInDt, PlanType::kJoinNode));
+
+      if (currentDt_->hasAggregation() || currentDt_->hasOrderBy() ||
+          currentDt_->hasLimit()) {
+        finalizeDt(*node.onlyInput());
+      }
+
+      translateUnnest(*node.asUnchecked<lp::UnnestNode>());
+      return currentDt_;
+    }
+
     default:
       VELOX_NYI(
           "Unsupported PlanNode {}", lp::NodeKindName::toName(node.kind()));
