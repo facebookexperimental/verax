@@ -550,6 +550,8 @@ class TempProjections {
   core::PlanNodePtr maybeProject(core::PlanNodePtr inputNode) && {
     VELOX_DCHECK_LE(usedChannel_, nextChannel_);
     if (nextChannel_ == input_.columns().size()) {
+      // TODO: Maybe for some plans we want to reduce projections
+      // if usedChannel_ < nextChannel_
       return inputNode;
     }
     const auto notNeededChannels = nextChannel_ - usedChannel_;
@@ -1165,14 +1167,10 @@ velox::core::PlanNodePtr ToVelox::makeProject(
   const auto outputTypeSize = project.exprs().size();
   VELOX_DCHECK_EQ(project.columns().size(), outputTypeSize);
 
-  // redundant == false is possible because multiple reasons:
-  // 1. Unnest should refererence all their columns
-  //    if at least one column referenced.
-  // 2. Join should reference at least one column from each side,
-  //    if at least one column referenced.
-  // 3. some project expressions are not input column references.
   const bool redundant = [&] {
     if (inputType.size() != outputTypeSize) {
+      // TODO: Maybe for some plans, if this projection isn't last node
+      // we don't want to reduce projections
       return false;
     }
     for (size_t i = 0; i < outputTypeSize; ++i) {
