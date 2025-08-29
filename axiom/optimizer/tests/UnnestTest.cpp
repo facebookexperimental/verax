@@ -57,19 +57,19 @@ TEST_F(PlanTest, unnest) {
   //  it can depend and not depend on unnested columns.
   //  And we should also check that any expressions are allowed inside unnest,
   //  not only input column references.
-  // 1. unnest
-  // 2. unnest after unnest
-  // 3. project before and after unnest
+  // - unnest
+  // - unnest after unnest
+  // - project before and after unnest
   // -- after this we will start to use project to simplify plans --
-  // 4. filter before and after unnest
-  // 5. group by before and after unnest
-  // 6. order by before and after unnest
-  // 7. limit before and after unnest
-  // 8. join before and after unnest
-  // 9. there's no extra columns in projections before unnest
+  // - filter before and after unnest
+  // - group by before and after unnest
+  // - order by before and after unnest
+  // - limit before and after unnest
+  // - join before and after unnest
+  // - there's no extra columns in projections before unnest
 
   {
-    SCOPED_TRACE("1. unnest");
+    SCOPED_TRACE("unnest");
 
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
@@ -96,7 +96,7 @@ TEST_F(PlanTest, unnest) {
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
   {
-    SCOPED_TRACE("2. unnest after unnest");
+    SCOPED_TRACE("unnest after unnest");
 
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
@@ -139,7 +139,7 @@ TEST_F(PlanTest, unnest) {
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
   {
-    SCOPED_TRACE("3.1 project before unnest");
+    SCOPED_TRACE("project before unnest");
 
     auto logicalPlanUnnest = lp::PlanBuilder{}
                                  .values({rowVector})
@@ -168,7 +168,7 @@ TEST_F(PlanTest, unnest) {
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
   {
-    SCOPED_TRACE("3.2 project after unnest (independent on unnested columns)");
+    SCOPED_TRACE("project after unnest (independent on unnested columns)");
 
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
@@ -194,7 +194,7 @@ TEST_F(PlanTest, unnest) {
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
   {
-    SCOPED_TRACE("3.3 project after unnest (dependent on unnested columns)");
+    SCOPED_TRACE("project after unnest (dependent on unnested columns)");
 
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
@@ -221,7 +221,7 @@ TEST_F(PlanTest, unnest) {
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
   {
-    SCOPED_TRACE("4.1 filter before unnest");
+    SCOPED_TRACE("filter before unnest");
 
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
@@ -249,7 +249,7 @@ TEST_F(PlanTest, unnest) {
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
   {
-    SCOPED_TRACE("4.2 filter after unnest (independent on unnested columns)");
+    SCOPED_TRACE("filter after unnest (independent on unnested columns)");
 
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
@@ -277,7 +277,7 @@ TEST_F(PlanTest, unnest) {
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
   {
-    SCOPED_TRACE("4.3 filter after unnest (dependent on unnested columns)");
+    SCOPED_TRACE("filter after unnest (dependent on unnested columns)");
 
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
@@ -315,7 +315,7 @@ TEST_F(PlanTest, unnest) {
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
   {
-    SCOPED_TRACE("5.1 group by before unnest");
+    SCOPED_TRACE("group by before unnest");
 
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
@@ -342,7 +342,7 @@ TEST_F(PlanTest, unnest) {
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
   {
-    SCOPED_TRACE("5.2 group by after unnest");
+    SCOPED_TRACE("group by after unnest");
 
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
@@ -369,7 +369,7 @@ TEST_F(PlanTest, unnest) {
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
   {
-    SCOPED_TRACE("6.1 order by before unnest");
+    SCOPED_TRACE("order by before unnest");
 
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
@@ -396,7 +396,7 @@ TEST_F(PlanTest, unnest) {
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
   {
-    SCOPED_TRACE("6.2 order by after unnest (independent on unnested columns)");
+    SCOPED_TRACE("order by after unnest (independent on unnested columns)");
 
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
@@ -423,7 +423,7 @@ TEST_F(PlanTest, unnest) {
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
   {
-    SCOPED_TRACE("6.3 order by after unnest (dependent on unnested columns)");
+    SCOPED_TRACE("order by after unnest (dependent on unnested columns)");
 
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
@@ -450,7 +450,7 @@ TEST_F(PlanTest, unnest) {
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
   {
-    SCOPED_TRACE("7.1 limit before unnest");
+    SCOPED_TRACE("limit before unnest");
 
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
@@ -477,7 +477,7 @@ TEST_F(PlanTest, unnest) {
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
   {
-    SCOPED_TRACE("7.2 limit after unnest");
+    SCOPED_TRACE("limit after unnest");
 
     auto logicalPlanUnnest =
         lp::PlanBuilder{}
@@ -504,7 +504,7 @@ TEST_F(PlanTest, unnest) {
     checkSame(logicalPlanUnnest, referencePlanUnnest);
   }
   {
-    SCOPED_TRACE("8.1 join before unnest (independent on unnested columns)");
+    SCOPED_TRACE("join before unnest (independent on unnested columns)");
 
     const std::vector<std::string> expectedNames{"x1", "a_y1", "a_z2"};
 
@@ -545,7 +545,7 @@ TEST_F(PlanTest, unnest) {
     ASSERT_EQ(plan->outputType()->names(), expectedNames);
   }
   {
-    SCOPED_TRACE("8.2 join before unnest (dependent on unnested columns)");
+    SCOPED_TRACE("join before unnest (dependent on unnested columns)");
 
     const std::vector<std::string> expectedNames{"x1", "a_y1", "a_z2"};
 
@@ -586,7 +586,7 @@ TEST_F(PlanTest, unnest) {
     ASSERT_EQ(plan->outputType()->names(), expectedNames);
   }
   {
-    SCOPED_TRACE("8.3 join after unnest (independent on unnested columns)");
+    SCOPED_TRACE("join after unnest (independent on unnested columns)");
 
     const std::vector<std::string> expectedNames{"x1", "a_y1", "a_z2"};
 
@@ -629,7 +629,7 @@ TEST_F(PlanTest, unnest) {
     ASSERT_EQ(plan->outputType()->names(), expectedNames);
   }
   {
-    SCOPED_TRACE("8.4 join after unnest (dependent on unnested columns)");
+    SCOPED_TRACE("join after unnest (dependent on unnested columns)");
 
     const std::vector<std::string> expectedNames{"x1", "a_y1", "a_z2"};
 
@@ -672,7 +672,7 @@ TEST_F(PlanTest, unnest) {
     ASSERT_EQ(plan->outputType()->names(), expectedNames);
   }
   {
-    SCOPED_TRACE("9. there's no extra columns in projections before unnest");
+    SCOPED_TRACE("there's no extra columns in projections before unnest");
 
     const std::vector<std::string> expectedNames{"x", "y"};
 
