@@ -859,10 +859,10 @@ void ToGraph::translateUnnest(const lp::UnnestNode& unnest) {
   ExprVector unnestExprs;
   unnestExprs.reserve(unnest.unnestExpressions().size());
   float maxCardinality = 0;
-  for (size_t i = 0; const auto& unnestedNames : unnest.unnestedNames()) {
+  for (size_t i = 0; i < unnest.unnestExpressions().size(); ++i) {
     const auto* unnestExpr = translateExpr(unnest.unnestExpressions()[i]);
     unnestExprs.push_back(unnestExpr);
-    if (i++ == 0) {
+    if (i == 0) {
       leftTable = unnestExpr->singleTable();
     } else if (leftTable && leftTable != unnestExpr->singleTable()) {
       leftTable = nullptr;
@@ -874,15 +874,16 @@ void ToGraph::translateUnnest(const lp::UnnestNode& unnest) {
   unnestTable->cname = newCName("ut");
   unnestTable->columns.reserve(
       unnest.outputType()->size() - unnest.onlyInput()->outputType()->size());
-  for (size_t i = 0; const auto& unnestedNames : unnest.unnestedNames()) {
-    const auto* unnestExpr = unnestExprs[i++];
-    for (size_t j = 0; const auto& unnestedName : unnestedNames) {
-      const auto* unnestedType = unnestExpr->value().type->childAt(j++).get();
+  for (size_t i = 0; i < unnestExprs.size(); ++i) {
+    const auto* unnestExpr = unnestExprs[i];
+    const auto& unnestedNames = unnest.unnestedNames()[i];
+    for (size_t j = 0; j < unnestedNames.size(); ++j) {
+      const auto* unnestedType = unnestExpr->value().type->childAt(j).get();
       // TODO: Value cardinality also should be multiplied by the max from all
       // columns average expected number of elements per unnested element.
       // Other Value properties also should be computed.
       Value value{unnestedType, maxCardinality};
-      const auto* columnName = toName(unnestedName);
+      const auto* columnName = toName(unnestedNames[j]);
       auto* column = make<Column>(columnName, unnestTable, value, columnName);
       unnestTable->columns.push_back(column);
       renames_[columnName] = column;
