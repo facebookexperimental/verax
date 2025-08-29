@@ -563,19 +563,25 @@ class JoinEdge {
     return make<JoinEdge>(leftTable, rightTable, Spec{.rightNotExists = true});
   }
 
+  static JoinEdge* makeUnnest(
+      PlanObjectCP leftTable,
+      PlanObjectCP rightTable,
+      ExprVector unnestExprs) {
+    auto* edge = make<JoinEdge>(leftTable, rightTable, Spec{.directed = true});
+    // We should use only leftKeys_, see
+    // https://github.com/facebookexperimental/verax/issues/298
+    edge->leftKeys_ = unnestExprs;
+    edge->rightKeys_ = std::move(unnestExprs);
+    edge->setFanouts(1, 1);
+    return edge;
+  }
+
   PlanObjectCP leftTable() const {
     return leftTable_;
   }
 
   PlanObjectCP rightTable() const {
     return rightTable_;
-  }
-
-  // This method should be removed, see
-  // https://github.com/facebookexperimental/verax/issues/298
-  void setKeys(ExprVector keys) {
-    leftKeys_ = keys;
-    rightKeys_ = std::move(keys);
   }
 
   const ExprVector& leftKeys() const {
