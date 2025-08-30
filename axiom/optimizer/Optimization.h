@@ -160,6 +160,10 @@ class Optimization {
   /// Produces trace output if event matches 'traceFlags_'.
   void trace(int32_t event, int32_t id, const Cost& cost, RelationOp& plan);
 
+  bool isMapAsStruct(ColumnCP column) const {
+    return toVelox_.isMapAsStruct(column);
+  }
+
  private:
   // Retrieves or makes a plan from 'key'. 'key' specifies a set of top level
   // joined tables or a hash join build side table or join.
