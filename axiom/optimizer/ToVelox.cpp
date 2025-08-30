@@ -34,7 +34,7 @@ namespace {
 std::vector<common::Subfield> columnSubfields(BaseTableCP table, int32_t id) {
   auto* optimization = queryCtx()->optimization();
 
-  const auto columnName = queryCtx()->objectAt(id)->as<Column>()->name();
+  const auto column = queryCtx()->objectAt(id)->as<Column>();
 
   BitSet set = table->columnSubfields(id, false, false);
 
@@ -43,7 +43,7 @@ std::vector<common::Subfield> columnSubfields(BaseTableCP table, int32_t id) {
     auto steps = queryCtx()->pathById(id)->steps();
     std::vector<std::unique_ptr<common::Subfield::PathElement>> elements;
     elements.push_back(
-        std::make_unique<common::Subfield::NestedField>(columnName));
+        std::make_unique<common::Subfield::NestedField>(column->name()));
     bool first = true;
     for (auto& step : steps) {
       switch (step.kind) {
@@ -59,9 +59,7 @@ std::vector<common::Subfield> columnSubfields(BaseTableCP table, int32_t id) {
                 std::make_unique<common::Subfield::AllSubscripts>());
             break;
           }
-          if (first &&
-              optimization->options().isMapAsStruct(
-                  table->schemaTable->name, columnName)) {
+          if (first && optimization->isMapAsStruct(column)) {
             elements.push_back(std::make_unique<common::Subfield::NestedField>(
                 step.field ? std::string(step.field)
                            : fmt::format("{}", step.id)));
@@ -349,9 +347,7 @@ ToVelox::pathToGetter(ColumnCP column, PathCP path, core::TypedExprPtr field) {
   // becomes a struct getter.
   auto alterStep = [&](ColumnCP, const Step& step, Step& newStep) {
     auto* rel = column->relation();
-    if (rel->is(PlanType::kTableNode) &&
-        isMapAsStruct(
-            rel->as<BaseTable>()->schemaTable->name, column->name())) {
+    if (rel->is(PlanType::kTableNode) && isMapAsStruct(column)) {
       // This column is a map to project out as struct.
       newStep.kind = StepKind::kField;
       if (step.field) {
@@ -947,7 +943,7 @@ RowTypePtr ToVelox::subfieldPushdownScanType(
       top.add(topColumn);
       topColumns.push_back(topColumn);
       names.push_back(topColumn->name());
-      if (isMapAsStruct(baseTable->schemaTable->name, topColumn->name())) {
+      if (isMapAsStruct(topColumn)) {
         types.push_back(skylineStruct(baseTable, topColumn));
         typeMap[topColumn] = types.back();
       } else {
