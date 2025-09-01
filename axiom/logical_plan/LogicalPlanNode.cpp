@@ -37,7 +37,7 @@ const auto& nodeKindNames() {
 }
 } // namespace
 
-VELOX_DEFINE_ENUM_NAME(NodeKind, nodeKindNames)
+VERAX_DEFINE_ENUM_NAME(NodeKind, nodeKindNames)
 
 namespace {
 
@@ -199,7 +199,7 @@ const auto& joinTypeNames() {
 }
 } // namespace
 
-VELOX_DEFINE_ENUM_NAME(JoinType, joinTypeNames)
+VERAX_DEFINE_ENUM_NAME(JoinType, joinTypeNames)
 
 // static
 RowTypePtr JoinNode::makeOutputType(
@@ -242,7 +242,7 @@ const auto& setOperationNames() {
 }
 } // namespace
 
-VELOX_DEFINE_ENUM_NAME(SetOperation, setOperationNames)
+VERAX_DEFINE_ENUM_NAME(SetOperation, setOperationNames)
 
 SetNode::SetNode(
     const std::string& id,
