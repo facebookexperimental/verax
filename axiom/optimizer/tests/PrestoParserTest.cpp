@@ -95,7 +95,7 @@ class PrestoParserTest : public testing::Test {
 
 TEST_F(PrestoParserTest, unnest) {
   {
-    auto matcher = lp::LogicalPlanMatcherBuilder().unnest();
+    auto matcher = lp::LogicalPlanMatcherBuilder().values().unnest();
     testSql("SELECT * FROM unnest(array[1, 2, 3])", matcher);
 
     testSql(
@@ -108,7 +108,7 @@ TEST_F(PrestoParserTest, unnest) {
   }
 
   {
-    auto matcher = lp::LogicalPlanMatcherBuilder().unnest().project();
+    auto matcher = lp::LogicalPlanMatcherBuilder().values().unnest().project();
     testSql("SELECT * FROM unnest(array[1, 2, 3]) as t(x)", matcher);
 
     testSql(
