@@ -26,6 +26,16 @@ namespace facebook::velox::optimizer {
 
 namespace {
 
+// Returns an int64 hash with low 28 bits set.
+template <typename TExec>
+struct Hash {
+  VELOX_DEFINE_FUNCTION_TYPES(TExec);
+
+  FOLLY_ALWAYS_INLINE void call(int64_t& result, const arg_type<Any>& value) {
+    result = value.hash() & 0x7fffffff;
+  }
+};
+
 template <typename TExec>
 struct HashMix {
   VELOX_DEFINE_FUNCTION_TYPES(TExec);
@@ -63,10 +73,6 @@ ExprCP makeCall(std::string_view name, const TypePtr& type, T... inputs) {
       FunctionSet{});
 }
 
-ExprCP makeCast(const TypePtr& type, ExprCP expr) {
-  return makeCall(SpecialFormCallNames::kCast, type, expr);
-}
-
 Value bigintValue() {
   return Value(toType(BIGINT()), 1);
 }
@@ -74,27 +80,6 @@ Value bigintValue() {
 ExprCP bigintLit(int64_t n) {
   return make<Literal>(
       bigintValue(), queryCtx()->registerVariant(std::make_unique<Variant>(n)));
-}
-
-// Returns an int64 hash with low 28 bits set.
-ExprCP makeHash(ExprCP expr) {
-  switch (expr->value().type->kind()) {
-    case TypeKind::BIGINT:
-      break;
-    case TypeKind::TINYINT:
-    case TypeKind::SMALLINT:
-    case TypeKind::INTEGER:
-      expr = makeCast(BIGINT(), expr);
-      break;
-    default: {
-      auto toVarchar = makeCast(VARCHAR(), expr);
-      auto toVarbinary = makeCast(VARBINARY(), toVarchar);
-      auto crc32 = makeCall("crc32", INTEGER(), toVarbinary);
-      expr = makeCast(BIGINT(), crc32);
-    }
-  }
-
-  return makeCall("bitwise_and", BIGINT(), expr, bigintLit(0x7fffffff));
 }
 
 std::shared_ptr<core::QueryCtx> sampleQueryCtx(const core::QueryCtx& original) {
@@ -117,10 +102,12 @@ std::shared_ptr<axiom::runner::Runner> prepareSampleRunner(
     int64_t mod,
     int64_t lim) {
   static folly::once_flag kInitialized;
+  static const char* kHash = "$internal$hash";
   static const char* kHashMix = "$internal$hash_mix";
   static const char* kSample = "$internal$sample";
 
   folly::call_once(kInitialized, []() {
+    registerFunction<Hash, int64_t, Any>({kHash});
     registerFunction<HashMix, int64_t, int64_t, Variadic<int64_t>>({kHashMix});
     registerFunction<
         Sample,
@@ -151,7 +138,7 @@ std::shared_ptr<axiom::runner::Runner> prepareSampleRunner(
   ExprVector hashes;
   hashes.reserve(keys.size());
   for (const auto& key : keys) {
-    hashes.emplace_back(makeHash(key));
+    hashes.emplace_back(makeCall(kHash, BIGINT(), key));
   }
 
   ExprCP hash =
