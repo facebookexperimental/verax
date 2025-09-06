@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "velox/common/Enums.h"
 #include "velox/connectors/Connector.h"
 #include "velox/core/PlanNode.h"
 #include "velox/exec/TaskStats.h"
@@ -67,7 +68,7 @@ class Runner {
  public:
   enum class State { kInitialized, kRunning, kFinished, kError, kCancelled };
 
-  static std::string stateString(Runner::State state);
+  VELOX_DECLARE_EMBEDDED_ENUM_NAME(State);
 
   virtual ~Runner() = default;
 
@@ -102,10 +103,10 @@ class Runner {
 
 template <>
 struct fmt::formatter<facebook::axiom::runner::Runner::State>
-    : formatter<std::string> {
+    : formatter<std::string_view> {
   auto format(facebook::axiom::runner::Runner::State state, format_context& ctx)
       const {
-    return formatter<std::string>::format(
-        facebook::axiom::runner::Runner::stateString(state), ctx);
+    return formatter<std::string_view>::format(
+        facebook::axiom::runner::Runner::toName(state), ctx);
   }
 };
