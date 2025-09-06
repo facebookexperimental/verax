@@ -23,21 +23,6 @@
 
 namespace facebook::axiom::runner {
 
-/// Testing proxy for a split source managed by a system with full metadata
-/// access.
-class SimpleSplitSource : public SplitSource {
- public:
-  explicit SimpleSplitSource(
-      std::vector<std::shared_ptr<velox::connector::ConnectorSplit>> splits)
-      : splits_(std::move(splits)) {}
-
-  virtual std::vector<SplitAndGroup> getSplits(uint64_t targetBytes) override;
-
- private:
-  std::vector<std::shared_ptr<velox::connector::ConnectorSplit>> splits_;
-  int32_t splitIdx_{0};
-};
-
 /// Testing proxy for a split source factory that uses connector metadata to
 /// enumerate splits. This takes a precomputed split list for each scan.
 class SimpleSplitSourceFactory : public SplitSourceFactory {
