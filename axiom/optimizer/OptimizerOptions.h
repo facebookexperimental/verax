@@ -21,6 +21,11 @@
 #include <unordered_map>
 #include <vector>
 
+namespace facebook::velox::connector {
+
+class ConnectorSession;
+
+} // namespace facebook::velox::connector
 namespace facebook::axiom::optimizer {
 
 struct OptimizerOptions {
@@ -59,6 +64,9 @@ struct OptimizerOptions {
 
   /// Produce trace of plan candidates.
   uint32_t traceFlags{0};
+
+  /// ConnectorSession, needed for write operations.
+  std::shared_ptr<connector::ConnectorSession> session{nullptr};
 
   bool isMapAsStruct(const char* table, const char* column) const {
     if (allMapsAsStruct) {
