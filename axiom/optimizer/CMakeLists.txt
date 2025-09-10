@@ -16,17 +16,16 @@ if(AXIOM_BUILD_TESTING)
   add_subdirectory(tests)
 endif()
 
-add_library(axiom_model Model.cpp)
+axiom_add_library(axiom_model Model.cpp)
 
-target_link_libraries(
-  axiom_model velox_exception)
+axiom_link_libraries(axiom_model velox_exception)
 
-add_library(axiom_schema_resolver SchemaResolver.cpp SchemaUtils.cpp)
+axiom_add_library(axiom_schema_resolver SchemaResolver.cpp SchemaUtils.cpp)
 
-target_link_libraries(
-  axiom_schema_resolver axiom_connector_metadata velox_exception velox_vector)
+axiom_link_libraries(axiom_schema_resolver axiom_connector_metadata
+                     velox_exception velox_vector)
 
-add_library(
+axiom_add_library(
   axiom_optimizer
   DerivedTable.cpp
   DerivedTablePrinter.cpp
@@ -48,9 +47,7 @@ add_library(
   VeloxHistory.cpp
   JoinSample.cpp)
 
-add_dependencies(axiom_optimizer velox_hive_connector)
-
-target_link_libraries(
+axiom_link_libraries(
   axiom_optimizer
   velox_core
   axiom_connector_metadata
