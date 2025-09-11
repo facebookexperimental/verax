@@ -176,10 +176,10 @@ velox::core::PlanNodePtr getDeserializedPlan(
 }
 
 struct PlanFragmentInfo {
-  velox::core::PlanNodePtr plan{nullptr};
+  velox::core::PlanNodePtr plan;
   std::unordered_map<std::string, std::unordered_set<std::string>>
-      remoteTaskIdMap{};
-  std::vector<velox::core::TableScanNodePtr> scans{};
+      remoteTaskIdMap;
+  std::vector<velox::core::TableScanNodePtr> scans;
   int numWorkers{0};
 };
 

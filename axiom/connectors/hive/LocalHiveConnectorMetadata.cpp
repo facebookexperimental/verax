@@ -34,6 +34,7 @@
 namespace facebook::velox::connector::hive {
 
 namespace fs = std::filesystem;
+
 std::vector<PartitionHandlePtr> LocalHiveSplitManager::listPartitions(
     const ConnectorTableHandlePtr& tableHandle) {
   // All tables are unpartitioned.
@@ -384,7 +385,7 @@ std::shared_ptr<LocalTable> LocalHiveConnectorMetadata::createTableFromSchema(
     partition.push_back(columns.back().get());
   }
 
-  std::unordered_map<std::string, std::string> options;
+  folly::F14FastMap<std::string, std::string> options;
   if (json.count("compressionKind")) {
     options["compression_kind"] = json["compressionKind"].asString();
   }
@@ -725,7 +726,7 @@ void LocalTable::sampleNumDistincts(float samplePct, memory::MemoryPool* pool) {
   }
 }
 
-const std::unordered_map<std::string, const Column*>& LocalTable::columnMap()
+const folly::F14FastMap<std::string, const Column*>& LocalTable::columnMap()
     const {
   std::lock_guard<std::mutex> l(mutex_);
   if (columns_.empty()) {
@@ -737,14 +738,14 @@ const std::unordered_map<std::string, const Column*>& LocalTable::columnMap()
   return exportedColumns_;
 }
 
-TablePtr LocalHiveConnectorMetadata::findTable(const std::string& name) {
+TablePtr LocalHiveConnectorMetadata::findTable(std::string_view name) {
   ensureInitialized();
   std::lock_guard<std::mutex> l(mutex_);
   return findTableLocked(name);
 }
 
 std::shared_ptr<LocalTable> LocalHiveConnectorMetadata::findTableLocked(
-    const std::string& name) const {
+    std::string_view name) const {
   auto it = tables_.find(name);
   if (it == tables_.end()) {
     return nullptr;
@@ -799,10 +800,6 @@ fs::path createTemporaryDirectory(const fs::path& parentDir) {
   }
 }
 
-std::string LocalHiveConnectorMetadata::makeStagingDirectory() {
-  return createTemporaryDirectory(fmt::format("{}/.staging", dataPath()));
-}
-
 void moveFilesRecursively(
     const fs::path& sourceDir,
     const fs::path& targetDir) {
@@ -851,7 +848,7 @@ void createDir(const std::string& path) {
 void LocalHiveConnectorMetadata::createTable(
     const std::string& tableName,
     const RowTypePtr& rowType,
-    const std::unordered_map<std::string, std::string>& options,
+    const folly::F14FastMap<std::string, std::string>& options,
     const ConnectorSessionPtr& session,
     bool errorIfExists,
     TableKind kind) {
@@ -938,7 +935,7 @@ void LocalHiveConnectorMetadata::createTable(
     c["type"] =
         type::fbhive::HiveTypeSerializer::serialize(rowType->childAt(i));
 
-    if (std::find(tokens.begin(), tokens.end(), name) == tokens.end()) {
+    if (std::ranges::find(tokens, name) == tokens.end()) {
       if (isPartition) {
         VELOX_USER_FAIL("Partitioning columns must be last");
       }
@@ -959,15 +956,22 @@ void LocalHiveConnectorMetadata::createTable(
   loadTable(tableName, path);
 }
 
+void LocalHiveConnectorMetadata::dropTable(const std::string& tableName) {
+  auto path = dataPath() + "/" + tableName;
+  std::lock_guard l{mutex_};
+  tables_.erase(tableName);
+  deleteDirectoryContents(path);
+}
+
 void LocalHiveConnectorMetadata::finishWrite(
     const TableLayout& layout,
     const ConnectorInsertTableHandlePtr& handle,
-    bool success,
-    const std::vector<RowVectorPtr>& /*writerResult*/,
     WriteKind /*kind*/,
-    const ConnectorSessionPtr& /*session*/) {
-  std::lock_guard<std::mutex> l(mutex_);
+    const ConnectorSessionPtr& /*session*/,
+    bool success,
+    const std::vector<RowVectorPtr>& /*results*/) {
   auto localHandle = dynamic_cast<const HiveInsertTableHandle*>(handle.get());
+  std::lock_guard l{mutex_};
   if (!success) {
     deleteDirectoryContents(localHandle->locationHandle()->writePath());
     return;
@@ -976,6 +980,10 @@ void LocalHiveConnectorMetadata::finishWrite(
       localHandle->locationHandle()->writePath(),
       localHandle->locationHandle()->targetPath());
   loadTable(layout.table().name(), localHandle->locationHandle()->targetPath());
+}
+
+std::string LocalHiveConnectorMetadata::makeStagingDirectory() {
+  return createTemporaryDirectory(fmt::format("{}/.staging", dataPath()));
 }
 
 } // namespace facebook::velox::connector::hive

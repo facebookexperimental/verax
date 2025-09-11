@@ -180,18 +180,17 @@ class ToTextVisitor : public PlanNodeVisitor {
   void visit(const TableWriteNode& node, PlanNodeVisitorContext& context)
       const override {
     auto& myContext = static_cast<Context&>(context);
+
     myContext.out << makeIndent(myContext.indent) << "- TableWrite:";
-
     appendOutputType(node, myContext);
-
     myContext.out << std::endl;
 
     const auto size = node.columnNames().size();
     const auto indent = makeIndent(myContext.indent + 2);
 
-    for (auto i = 0; i < size; ++i) {
-      myContext.out << indent << node.columnNames().at(i)
-                    << " := " << ExprPrinter::toText(*node.values().at(i))
+    for (size_t i = 0; i < size; ++i) {
+      myContext.out << indent << node.columnNames()[i] << " := "
+                    << ExprPrinter::toText(*node.columnExpressions()[i])
                     << std::endl;
     }
 
@@ -371,7 +370,7 @@ class CollectExprStatsPlanNodeVisitor : public PlanNodeVisitor {
   void visit(const TableWriteNode& node, PlanNodeVisitorContext& context)
       const override {
     auto& stats = static_cast<Context&>(context).stats;
-    collectExprStats(node.values(), stats);
+    collectExprStats(node.columnExpressions(), stats);
     visitInputs(node, context);
   }
 
@@ -651,8 +650,7 @@ class SummarizeToTextVisitor : public PlanNodeVisitor {
                     << std::endl;
       myContext.out << indent << "columns: " << node.columnNames().size()
                     << std::endl;
-
-      appendExpressions(node.values(), myContext);
+      appendExpressions(node.columnExpressions(), myContext);
     }
 
     appendInputs(node, myContext);

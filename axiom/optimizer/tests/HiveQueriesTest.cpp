@@ -80,7 +80,7 @@ TEST_F(HiveQueriesTest, basic) {
 
 TEST_F(HiveQueriesTest, crossJoin) {
   auto statement =
-      prestoParser_->parse("SELECT * FROM nation JOIN region ON true", true);
+      prestoParser_->parse("SELECT * FROM nation JOIN region ON true");
 
   ASSERT_TRUE(statement->isSelect());
   auto logicalPlan = statement->asUnchecked<test::SelectStatement>()->plan();
@@ -132,7 +132,6 @@ TEST_F(HiveQueriesTest, orderOfOperations) {
   test(
       scan("nation")
           .orderBy({"n_nationkey"})
-
           .aggregate({"n_name"}, {"count(1)"})
           .orderBy({"n_name desc"}),
       // Fix this plan. There should be no partial agg.
@@ -147,7 +146,6 @@ TEST_F(HiveQueriesTest, orderOfOperations) {
   // keys are pushed down below the groupBy.
   test(
       scan("nation")
-
           .aggregate({"n_name"}, {"count(1) as cnt"})
           .filter("n_name > 'a'")
           .filter("cnt > 10")

@@ -158,7 +158,7 @@ ConnectorTableHandlePtr HiveConnectorMetadata::createTableHandle(
 ConnectorInsertTableHandlePtr HiveConnectorMetadata::createInsertTableHandle(
     const TableLayout& layout,
     const RowTypePtr& rowType,
-    const std::unordered_map<std::string, std::string>& options,
+    const folly::F14FastMap<std::string, std::string>& options,
     WriteKind kind,
     const ConnectorSessionPtr& session) {
   ensureInitialized();
@@ -231,28 +231,20 @@ ConnectorInsertTableHandlePtr HiveConnectorMetadata::createInsertTableHandle(
 }
 
 void HiveConnectorMetadata::validateOptions(
-    const std::unordered_map<std::string, std::string>& options) const {
-  static std::unordered_set<std::string> allowed = {
+    const folly::F14FastMap<std::string, std::string>& options) const {
+  static const folly::F14FastSet<std::string> kAllowed = {
       "bucketed_by",
       "sorted_by",
       "bucket_count",
       "partitioned_by",
       "file_format",
-      "compression_kind"};
+      "compression_kind",
+  };
   for (auto& pair : options) {
-    if (allowed.find(pair.first) == allowed.end()) {
+    if (!kAllowed.contains(pair.first)) {
       VELOX_USER_FAIL("Option {} is not supported", pair.first);
     }
   }
-}
-
-RowTypePtr HiveConnectorMetadata::tableWriteOutputType(
-    const RowTypePtr& /*rowType*/,
-    WriteKind kind) const {
-  VELOX_CHECK_EQ(kind, WriteKind::kInsert);
-  return ROW(
-      {"numWrittenRows", "fragment", "tableCommitContext"},
-      {BIGINT(), VARBINARY(), VARBINARY()});
 }
 
 } // namespace facebook::velox::connector::hive

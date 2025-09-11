@@ -258,7 +258,7 @@ void TpchTable::makeDefaultLayout(
   layouts_.push_back(std::move(layout));
 }
 
-const std::unordered_map<std::string, const Column*>& TpchTable::columnMap()
+const folly::F14FastMap<std::string, const Column*>& TpchTable::columnMap()
     const {
   std::lock_guard<std::mutex> l(mutex_);
   if (columns_.empty()) {
@@ -270,8 +270,10 @@ const std::unordered_map<std::string, const Column*>& TpchTable::columnMap()
   return exportedColumns_;
 }
 
-std::string getQualifiedName(const std::string& name) {
-  axiom::optimizer::TableNameParser parser(name);
+namespace {
+
+std::string getQualifiedName(std::string_view name) {
+  axiom::optimizer::TableNameParser parser{name};
   VELOX_CHECK(parser.valid(), "invalid table name '{}'", name);
   std::string qualifiedName;
   if (parser.schema().has_value()) {
@@ -284,7 +286,9 @@ std::string getQualifiedName(const std::string& name) {
   return qualifiedName;
 }
 
-TablePtr TpchConnectorMetadata::findTable(const std::string& name) {
+} // namespace
+
+TablePtr TpchConnectorMetadata::findTable(std::string_view name) {
   ensureInitialized();
   const auto qualifiedName = getQualifiedName(name);
   auto it = tables_.find(qualifiedName);

@@ -73,12 +73,12 @@ std::shared_ptr<SplitSource> TestSplitManager::getSplitSource(
 }
 
 std::shared_ptr<Table> TestConnectorMetadata::findTableInternal(
-    const std::string& name) {
+    std::string_view name) {
   auto it = tables_.find(name);
   return it != tables_.end() ? it->second : nullptr;
 }
 
-TablePtr TestConnectorMetadata::findTable(const std::string& name) {
+TablePtr TestConnectorMetadata::findTable(std::string_view name) {
   return findTableInternal(name);
 }
 

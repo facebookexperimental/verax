@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include "axiom/utils/EnumFormatter.h"
 #include "velox/common/memory/HashStringAllocator.h"
 #include "velox/connectors/Connector.h"
 #include "velox/type/Subfield.h"
@@ -99,12 +100,12 @@ class Column {
   virtual ~Column() = default;
 
   Column(
-      const std::string& name,
+      std::string name,
       TypePtr type,
-      std::optional<Variant> defaultValue = std::nullopt)
-      : name_(name),
-        type_(std::move(type)),
-        defaultValue_(makeDefaultValue(type_, defaultValue)) {}
+      std::optional<Variant> defaultValue = {})
+      : name_{std::move(name)},
+        type_{std::move(type)},
+        defaultValue_{makeDefaultValue(type_, std::move(defaultValue))} {}
 
   const ColumnStatistics* stats() const {
     return latestStats_;
@@ -151,6 +152,7 @@ class Column {
   const std::string name_;
   const TypePtr type_;
   const Variant defaultValue_;
+
   // The latest element added to 'allStats_'.
   tsan_atomic<ColumnStatistics*> latestStats_{nullptr};
 
@@ -161,7 +163,7 @@ class Column {
  private:
   static Variant makeDefaultValue(
       const TypePtr& type,
-      std::optional<Variant>& value);
+      std::optional<Variant>&& value);
 
   // Serializes changes to statistics.
   std::mutex mutex_;
@@ -184,8 +186,6 @@ struct SortOrder {
 /// types are compatible.
 class PartitionType {
  public:
-
-  virtual ~PartitionType() = default;
   virtual std::optional<int32_t> numPartitions() const {
     return std::nullopt;
   }
@@ -218,6 +218,11 @@ class PartitionType {
       bool isLocal) const = 0;
 
   virtual std::string toString() const = 0;
+
+ protected:
+  /// Instead of virtual dtor we use protected dtor to prevent
+  /// deletion through base class pointer.
+  ~PartitionType() = default;
 };
 
 /// Represents a physical manifestation of a table. There is at least
@@ -353,7 +358,7 @@ class TableLayout {
 /// used for accessing physical organization like partitioning and sort order.
 /// The Table object maintains ownership over the objects it contains, including
 /// the TableLayout and Columns contained in the Table.
-class Table {
+class Table : public std::enable_shared_from_this<Table> {
  public:
   virtual ~Table() = default;
 
@@ -361,7 +366,7 @@ class Table {
       std::string name,
       RowTypePtr type,
       TableKind kind = TableKind::kTable,
-      std::unordered_map<std::string, std::string> options = {})
+      folly::F14FastMap<std::string, std::string> options = {})
       : name_(std::move(name)),
         type_(std::move(type)),
         kind_(kind),
@@ -387,7 +392,7 @@ class Table {
   /// non-owned columns. Implementations may have different Column
   /// implementations with different options, so we do not return the
   /// implementation's columns but an abstract form.
-  virtual const std::unordered_map<std::string, const Column*>& columnMap()
+  virtual const folly::F14FastMap<std::string, const Column*>& columnMap()
       const = 0;
 
   const Column* findColumn(const std::string& name) const {
@@ -401,7 +406,7 @@ class Table {
   /// Returns an estimate of the number of rows in 'this'.
   virtual uint64_t numRows() const = 0;
 
-  virtual const std::unordered_map<std::string, std::string>& options() const {
+  virtual const folly::F14FastMap<std::string, std::string>& options() const {
     return options_;
   }
 
@@ -414,7 +419,7 @@ class Table {
 
   const TableKind kind_;
 
-  const std::unordered_map<std::string, std::string> options_;
+  const folly::F14FastMap<std::string, std::string> options_;
 };
 
 using TablePtr = std::shared_ptr<const Table>;
@@ -562,18 +567,18 @@ enum class WriteKind {
   // Rows are added and all columns must be specified for the TableWriter. This
   // covers insert, create table and replacing a Hive partition and any other
   // use that adds whole rows.
-  kInsert,
+  kInsert = 1,
 
   // Individual rows are deleted. Only row ids as per
   // ConnectorMetadata::rowIdHandles() are passed to the TableWriter.
-  kDelete,
+  kDelete = 2,
 
   // Column values in individual rows are changed. The TableWriter
   // gets first the row ids as per ConnectorMetadata::rowIdHandles()
   // and then new values for the columns being changed. The new values
   // may overlap with row ids if the row id is a set of primary key
   // columns.
-  kUpdate
+  kUpdate = 3,
 };
 
 VELOX_DECLARE_ENUM_NAME(WriteKind);
@@ -642,42 +647,20 @@ class ConnectorMetadata {
   /// reference ot the Table object at any time, and callers are required
   /// to retain a reference to the Table to prevent it from being reclaimed
   /// in the case of Table removal by the ConnectorMetadata.
-  virtual TablePtr findTable(const std::string& name) = 0;
+  virtual TablePtr findTable(std::string_view name) = 0;
 
   /// Returns a SplitManager for split enumeration for TableLayouts accessed
   /// through 'this'.
   virtual ConnectorSplitManager* splitManager() = 0;
 
-  /// Creates a table. 'tableName' is a name with optional 'schema.'
-  /// followed by table name. The connector gives the first part of
-  /// the three part name. The table properties are in 'options'. All
-  /// options must be understood by the connector. To create a table,
-  /// first make a ConnectorSession in a connector dependent manner,
-  /// then call createTable, then access the created layout(s) and
-  /// make an insert table handle for writing each. Insert data into
-  /// each layout and then call finishWrite on each. Normally a table
-  /// has one layout but if many exist, as in secondary indices or
-  /// materializations that are not transparently handled by an
-  /// outside system, the optimizer is expected to make plans that
-  /// write to all. In such cases the plan typically has a different
-  /// table writer for each materialization. Any transaction semantics
-  /// are connector dependent. Throws an error if the table exists,
-  /// unless 'errorIfExists' is false, in which case the operation returns
-  /// silently.  finishWrite should be called for all insert table handles
-  /// to complete the write also if no data is added. To create an empty
-  /// table, call createTable and then commit if the connector is
-  /// transactional. to create the table with data, insert into all
-  /// materializations, call finishWrite on each and then commit the whole
-  /// transaction if the connector requires that.
-  virtual void createTable(
-      const std::string& tableName,
-      const RowTypePtr& rowType,
-      const std::unordered_map<std::string, std::string>& options,
-      const ConnectorSessionPtr& session,
-      bool errorIfExists = true,
-      TableKind tableKind = TableKind::kTable) = 0;
+  /// Returns column handles whose value uniquely identifies a row for creating
+  /// an update or delete record. These may be for example some connector
+  /// specific opaque row id or primary key columns.
+  virtual std::vector<ColumnHandlePtr> rowIdHandles(
+      const TableLayout& layout,
+      WriteKind kind) = 0;
 
-  /// Creates an insert table handle for use with Velox TableWriter. '
+  /// Creates an insert table handle for use with Velox TableWriter.
   /// 'rowType' is the type of one row, including any partitioning or
   /// bucketing columns. The order may be significant, for example
   /// Hive needs partitioning columns to be last in column order. If
@@ -694,60 +677,27 @@ class ConnectorMetadata {
   virtual ConnectorInsertTableHandlePtr createInsertTableHandle(
       const TableLayout& layout,
       const RowTypePtr& rowType,
-      const std::unordered_map<std::string, std::string>& options,
+      const folly::F14FastMap<std::string, std::string>& options,
       WriteKind kind,
       const ConnectorSessionPtr& session) = 0;
 
   /// Finalizes a table write. This runs once after all the table writers have
   /// finished. The result sets from the table writer fragments are passed as
-  /// 'writerResults'. Their format and meaning is connector specific. the
-  /// RowType is given by the outputType() of the TableWriter. If 'success' is
-  /// false, the write should be cancelled and possible partial results deleted.
-  /// In this case 'writerResult' may be empty.
+  /// 'result'. Their format and meaning is connector specific. the
+  /// RowType is given by the outputType() of the TableWriter. If 'error' is not
+  /// null, the write should be cancelled and possible partial results deleted.
+  /// In this case 'result' may be empty.
   virtual void finishWrite(
       const TableLayout& layout,
       const ConnectorInsertTableHandlePtr& handle,
-      bool success,
-      const std::vector<RowVectorPtr>& writerResult,
       WriteKind kind,
-      const ConnectorSessionPtr& session) = 0;
-
-  /// Returns the output type of TableWrite operator for a row with columns as
-  /// in 'rowType'.
-  virtual RowTypePtr tableWriteOutputType(
-      const RowTypePtr& rowType,
-      WriteKind kind) const {
-    VELOX_UNSUPPORTED();
-  }
-
-  /// Returns column handles whose value uniquely identifies a row for creating
-  /// an update or delete record. These may be for example some connector
-  /// specific opaque row id or primary key columns.
-  virtual std::vector<ColumnHandlePtr> rowIdHandles(
-      const TableLayout& layout,
-      WriteKind kind) = 0;
+      const ConnectorSessionPtr& session,
+      bool success,
+      const std::vector<RowVectorPtr>& results) = 0;
 };
 
 } // namespace facebook::velox::connector
 
-template <>
-struct fmt::formatter<facebook::velox::connector::TableKind>
-    : fmt::formatter<string_view> {
-  template <typename FormatContext>
-  auto format(facebook::velox::connector::TableKind k, FormatContext& ctx)
-      const {
-    return formatter<string_view>::format(
-        facebook::velox::connector::TableKindName::toName(k), ctx);
-  }
-};
+AXIOM_ENUM_FORMATTER(facebook::velox::connector::TableKind);
 
-template <>
-struct fmt::formatter<facebook::velox::connector::WriteKind>
-    : fmt::formatter<string_view> {
-  template <typename FormatContext>
-  auto format(facebook::velox::connector::WriteKind k, FormatContext& ctx)
-      const {
-    return formatter<string_view>::format(
-        facebook::velox::connector::WriteKindName::toName(k), ctx);
-  }
-};
+AXIOM_ENUM_FORMATTER(facebook::velox::connector::WriteKind);

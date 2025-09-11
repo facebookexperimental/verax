@@ -1110,8 +1110,8 @@ TEST_F(PlanPrinterTest, tableWrite) {
                       kTestConnectorId,
                       "output_table",
                       WriteKind::kInsert,
-                      {Sql("a"), Sql("cast(b as varchar)")},
-                      {"col_a", "col_b"})
+                      {"col_a", "col_b"},
+                      {Sql("a"), Sql("cast(b as varchar)")})
                   .build();
 
   auto lines = toLines(plan);

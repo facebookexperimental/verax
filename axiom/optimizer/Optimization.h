@@ -143,13 +143,6 @@ class Optimization {
     return history_;
   }
 
-  /// Retain a reference to the provided TablePtr to ensure
-  /// the Table is retained for the duration of Optimization, even if
-  /// dropped by the corresponding ConnectorMetadata.
-  void retainConnectorTable(velox::connector::TablePtr table) {
-    retainedTables_.insert(std::move(table));
-  }
-
   /// If false, correlation names are not included in Column::toString(). Used
   /// for canonicalizing join cache keys.
   bool& cnamesInExpr() {
@@ -168,14 +161,6 @@ class Optimization {
   /// Produces trace output if event matches 'traceFlags_'.
   void trace(uint32_t event, int32_t id, const Cost& cost, RelationOp& plan)
       const;
-
-  connector::ConnectorInsertTableHandlePtr writeHandle(int32_t id) {
-    return toGraph_.writeHandles().at(id);
-  }
-
-  const std::unordered_set<connector::TablePtr> retainedTables() const {
-    return retainedTables_;
-  }
 
  private:
   // Retrieves or makes a plan from 'key'. 'key' specifies a set of top level
@@ -314,9 +299,6 @@ class Optimization {
   History& history_;
 
   std::shared_ptr<velox::core::QueryCtx> veloxQueryCtx_;
-
-  // Set of tables in use by the Optimizer.
-  std::unordered_set<velox::connector::TablePtr> retainedTables_;
 
   // Top DerivedTable when making a QueryGraph from PlanNode.
   DerivedTableP root_;

@@ -16,7 +16,7 @@
 #pragma once
 
 #include "axiom/logical_plan/Expr.h"
-#include "velox/common/Enums.h"
+#include "axiom/utils/EnumFormatter.h"
 #include "velox/type/Variant.h"
 #include "velox/vector/ComplexVector.h"
 
@@ -657,24 +657,25 @@ class UnnestNode : public LogicalPlanNode {
 
 using UnnestNodePtr = std::shared_ptr<const UnnestNode>;
 
-/// Corresponds to connector::WriteKind.
+/// Values of enum corresponds to velox::connector::WriteKind.
+/// Specifies what type of write is intended when initiating or concluding a
+/// write operation.
 enum class WriteKind {
-  // Rows are added . All columns are written and either have a value in from an
-  // expression in the table writer or get a default from the schema. This
+  // Rows are added and all columns must be specified for the TableWriter. This
   // covers insert, create table and replacing a Hive partition and any other
   // use that adds whole rows.
-  kInsert,
+  kInsert = 1,
 
   // Individual rows are deleted. Only row ids as per
   // ConnectorMetadata::rowIdHandles() are passed to the TableWriter.
-  kDelete,
+  kDelete = 2,
 
   // Column values in individual rows are changed. The TableWriter
   // gets first the row ids as per ConnectorMetadata::rowIdHandles()
   // and then new values for the columns being changed. The new values
   // may overlap with row ids if the row id is a set of primary key
   // columns.
-  kUpdate
+  kUpdate = 3,
 };
 
 VELOX_DECLARE_ENUM_NAME(WriteKind);
@@ -685,34 +686,34 @@ class TableWriteNode : public LogicalPlanNode {
   /// @param id Unique ID of the plan node.
   /// @param connectorId ID of the connector to use to access the table.
   /// @param tableName Table name.
-  /// @param kind - Indicates the type of write (insert/delete/update)
-  /// @param values - Expressions producing the values to write.. Correspond 1:1
-  /// to 'columnNames'.
-  /// @param columnNames A List of columns in the table being written. 1:1 to
-  /// 'inputNames'. 'columnNames' must refer to columns in the table but their
-  /// number or order does not have to correspond to the table. Missing columns
-  /// in insert get their default from the table.
-  /// @param outputType - Connector dependent output.
-  /// @param options - Writer dependent options. Mayy specify compression or
-  /// encoding options. The table always specifies partitioning. 'options' are
-  /// only for advanced/testing features.
+  /// @param kind Indicates the type of write (insert/delete/update)
+  /// @param columnNames A List of columns in the table being written.
+  /// Correspond 1:1 to 'columnExpressions'. 'columnNames' must refer to columns
+  /// in the table but their number or order does not have to correspond to the
+  /// table. Missing columns in insert get their default from the table.
+  /// @param columnExpressions Expressions producing the values to write.
+  /// Correspond 1:1 to 'names'.
+  /// @param outputType Connector dependent output.
+  /// @param options Writer dependent options. May specify compression or
+  /// encoding options. The table always specifies partitioning.
+  /// 'options' are only for advanced/testing features.
   TableWriteNode(
-      const std::string& id,
-      const LogicalPlanNodePtr& input,
-      const std::string& connectorId,
-      const std::string& tableName,
+      std::string id,
+      LogicalPlanNodePtr input,
+      std::string connectorId,
+      std::string tableName,
       WriteKind kind,
-      const std::vector<ExprPtr>& values,
-      const std::vector<std::string>& columnNames,
-      const RowTypePtr& outputType,
-      const std::unordered_map<std::string, std::string>& options = {})
-      : LogicalPlanNode(NodeKind::kTableWrite, id, {input}, outputType),
-        connectorId_(connectorId),
-        tableName_(tableName),
-        writeKind_(kind),
-        values_(values),
-        columnNames_(columnNames),
-        options_(options) {}
+      std::vector<std::string> columnNames,
+      std::vector<ExprPtr> columnExpressions,
+      velox::RowTypePtr outputType,
+      folly::F14FastMap<std::string, std::string> options = {})
+      : LogicalPlanNode{NodeKind::kTableWrite, std::move(id), {std::move(input)}, std::move(outputType)},
+        connectorId_{std::move(connectorId)},
+        tableName_{std::move(tableName)},
+        kind_{kind},
+        columnNames_{std::move(columnNames)},
+        columnExpressions_{std::move(columnExpressions)},
+        options_{std::move(options)} {}
 
   const std::string& connectorId() const {
     return connectorId_;
@@ -722,19 +723,19 @@ class TableWriteNode : public LogicalPlanNode {
     return tableName_;
   }
 
-  WriteKind writeKind() const {
-    return writeKind_;
-  }
-
-  const std::vector<ExprPtr>& values() const {
-    return values_;
+  WriteKind kind() const {
+    return kind_;
   }
 
   const std::vector<std::string>& columnNames() const {
     return columnNames_;
   }
 
-  const std::unordered_map<std::string, std::string>& options() const {
+  const std::vector<ExprPtr>& columnExpressions() const {
+    return columnExpressions_;
+  }
+
+  const folly::F14FastMap<std::string, std::string>& options() const {
     return options_;
   }
 
@@ -742,27 +743,16 @@ class TableWriteNode : public LogicalPlanNode {
       const override;
 
  private:
-  static RowTypePtr makeWriteType();
-
   const std::string connectorId_;
   const std::string tableName_;
-  const WriteKind writeKind_;
-  const std::vector<ExprPtr> values_;
+  const WriteKind kind_;
   const std::vector<std::string> columnNames_;
-  const std::unordered_map<std::string, std::string> options_;
+  const std::vector<ExprPtr> columnExpressions_;
+  const folly::F14FastMap<std::string, std::string> options_;
 };
 
 using TableWriteNodePtr = std::shared_ptr<const TableWriteNode>;
 
 } // namespace facebook::axiom::logical_plan
 
-template <>
-struct fmt::formatter<facebook::axiom::logical_plan::WriteKind>
-    : fmt::formatter<string_view> {
-  template <typename FormatContext>
-  auto format(facebook::axiom::logical_plan::WriteKind k, FormatContext& ctx)
-      const {
-    return formatter<string_view>::format(
-        facebook::axiom::logical_plan::WriteKindName::toName(k), ctx);
-  }
-};
+AXIOM_ENUM_FORMATTER(facebook::axiom::logical_plan::WriteKind);

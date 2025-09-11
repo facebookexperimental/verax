@@ -67,7 +67,7 @@ class TestTable : public Table {
       const RowTypePtr& schema,
       TestConnector* connector);
 
-  const std::unordered_map<std::string, const Column*>& columnMap()
+  const folly::F14FastMap<std::string, const Column*>& columnMap()
       const override {
     return columns_;
   }
@@ -108,7 +108,7 @@ class TestTable : public Table {
 
  private:
   connector::Connector* connector_;
-  std::unordered_map<std::string, const Column*> columns_;
+  folly::F14FastMap<std::string, const Column*> columns_;
   std::vector<std::unique_ptr<Column>> exportedColumns_;
   std::vector<const TableLayout*> layouts_;
   std::vector<std::unique_ptr<TableLayout>> exportedLayouts_;
@@ -239,11 +239,11 @@ class TestConnectorMetadata : public ConnectorMetadata {
 
   void initialize() override {}
 
-  TablePtr findTable(const std::string& name) override;
+  TablePtr findTable(std::string_view name) override;
 
   /// Non-interface method which supplies a non-const Table reference
   /// which is capable of performing writes to the underlying table.
-  std::shared_ptr<Table> findTableInternal(const std::string& name);
+  std::shared_ptr<Table> findTableInternal(std::string_view name);
 
   ConnectorSplitManager* splitManager() override {
     return splitManager_.get();
@@ -265,20 +265,10 @@ class TestConnectorMetadata : public ConnectorMetadata {
       RowTypePtr dataColumns,
       std::optional<LookupKeys>) override;
 
-  void createTable(
-      const std::string& tableName,
-      const RowTypePtr& rowType,
-      const std::unordered_map<std::string, std::string>& options,
-      const ConnectorSessionPtr& session,
-      bool errorIfExists = true,
-      TableKind tableKind = TableKind::kTable) override {
-    VELOX_UNSUPPORTED();
-  }
-
   ConnectorInsertTableHandlePtr createInsertTableHandle(
       const TableLayout& layout,
       const RowTypePtr& rowType,
-      const std::unordered_map<std::string, std::string>& options,
+      const folly::F14FastMap<std::string, std::string>& options,
       WriteKind kind,
       const ConnectorSessionPtr& session) override {
     VELOX_UNSUPPORTED();
@@ -287,17 +277,11 @@ class TestConnectorMetadata : public ConnectorMetadata {
   void finishWrite(
       const TableLayout& layout,
       const ConnectorInsertTableHandlePtr& handle,
-      bool success,
-      const std::vector<RowVectorPtr>& writerResult,
       WriteKind kind,
-      const ConnectorSessionPtr& session) override {
+      const ConnectorSessionPtr& session,
+      bool success,
+      const std::vector<RowVectorPtr>& results) override {
     VELOX_UNSUPPORTED();
-  }
-
-  RowTypePtr tableWriteOutputType(
-      const RowTypePtr& /*rowType*/,
-      WriteKind /*kind*/) const override {
-    return ROW({}, {});
   }
 
   std::vector<ColumnHandlePtr> rowIdHandles(
@@ -320,7 +304,7 @@ class TestConnectorMetadata : public ConnectorMetadata {
 
  private:
   TestConnector* connector_;
-  std::unordered_map<std::string, std::shared_ptr<TestTable>> tables_;
+  folly::F14FastMap<std::string, std::shared_ptr<TestTable>> tables_;
   std::unique_ptr<TestSplitManager> splitManager_;
 };
 
