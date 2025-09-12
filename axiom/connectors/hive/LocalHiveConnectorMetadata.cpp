@@ -33,6 +33,8 @@
 
 namespace facebook::velox::connector::hive {
 
+namespace fs = std::filesystem;
+
 std::vector<PartitionHandlePtr> LocalHiveSplitManager::listPartitions(
     const ConnectorTableHandlePtr& tableHandle) {
   // All tables are unpartitioned.
@@ -383,7 +385,7 @@ std::shared_ptr<LocalTable> LocalHiveConnectorMetadata::createTableFromSchema(
     partition.push_back(columns.back().get());
   }
 
-  std::unordered_map<std::string, std::string> options;
+  folly::F14FastMap<std::string, std::string> options;
   if (json.count("compressionKind")) {
     options["compression_kind"] = json["compressionKind"].asString();
   }
@@ -724,7 +726,7 @@ void LocalTable::sampleNumDistincts(float samplePct, memory::MemoryPool* pool) {
   }
 }
 
-const std::unordered_map<std::string, const Column*>& LocalTable::columnMap()
+const folly::F14FastMap<std::string, const Column*>& LocalTable::columnMap()
     const {
   std::lock_guard<std::mutex> l(mutex_);
   if (columns_.empty()) {
@@ -736,14 +738,14 @@ const std::unordered_map<std::string, const Column*>& LocalTable::columnMap()
   return exportedColumns_;
 }
 
-TablePtr LocalHiveConnectorMetadata::findTable(const std::string& name) {
+TablePtr LocalHiveConnectorMetadata::findTable(std::string_view name) {
   ensureInitialized();
   std::lock_guard<std::mutex> l(mutex_);
   return findTableLocked(name);
 }
 
 std::shared_ptr<LocalTable> LocalHiveConnectorMetadata::findTableLocked(
-    const std::string& name) const {
+    std::string_view name) const {
   auto it = tables_.find(name);
   if (it == tables_.end()) {
     return nullptr;
@@ -780,6 +782,55 @@ void deleteDirectoryContents(const std::string& path) {
   closedir(dir);
 }
 
+fs::path createTemporaryDirectory(const fs::path& parentDir) {
+  static std::random_device rd;
+  static std::mt19937 gen(rd());
+  static std::uniform_int_distribution<uint32_t> dis(1, 1000000);
+  static std::mutex mutex;
+  fs::path tempDirPath;
+  std::lock_guard<std::mutex> l(mutex);
+  for (;;) {
+    do {
+      uint32_t randomNumber = dis(gen);
+      tempDirPath = parentDir / ("temp_" + std::to_string(randomNumber));
+    } while (fs::exists(tempDirPath));
+    if (common::generateFileDirectory(tempDirPath.c_str())) {
+      return tempDirPath;
+    }
+  }
+}
+
+void moveFilesRecursively(
+    const fs::path& sourceDir,
+    const fs::path& targetDir) {
+  if (!fs::exists(sourceDir) || !fs::is_directory(sourceDir)) {
+    throw std::runtime_error(
+        "Source directory does not exist or is not a directory: " +
+        sourceDir.string());
+  }
+  // Create the target directory if it doesn't exist
+  if (!fs::exists(targetDir)) {
+    fs::create_directories(targetDir);
+  }
+  // Recursively iterate through the source directory
+  for (const auto& entry : fs::recursive_directory_iterator(sourceDir)) {
+    if (entry.is_regular_file()) {
+      // Compute the relative path from the source directory
+      fs::path relPath = fs::relative(entry.path(), sourceDir);
+      fs::path destPath = targetDir / relPath;
+      // Create enclosing directories in the target if they don't exist
+      fs::create_directories(destPath.parent_path());
+      // Move the file
+      fs::rename(entry.path(), destPath);
+    }
+  }
+  // Optionally, remove empty directories in the source
+  deleteDirectoryContents(sourceDir);
+  if (fs::is_empty(sourceDir)) {
+    fs::remove(sourceDir);
+  }
+}
+
 // Helper: Check if directory exists.
 bool dirExists(const std::string& path) {
   struct stat info;
@@ -797,7 +848,7 @@ void createDir(const std::string& path) {
 void LocalHiveConnectorMetadata::createTable(
     const std::string& tableName,
     const RowTypePtr& rowType,
-    const std::unordered_map<std::string, std::string>& options,
+    const folly::F14FastMap<std::string, std::string>& options,
     const ConnectorSessionPtr& session,
     bool errorIfExists,
     TableKind kind) {
@@ -884,7 +935,7 @@ void LocalHiveConnectorMetadata::createTable(
     c["type"] =
         type::fbhive::HiveTypeSerializer::serialize(rowType->childAt(i));
 
-    if (std::find(tokens.begin(), tokens.end(), name) == tokens.end()) {
+    if (std::ranges::find(tokens, name) == tokens.end()) {
       if (isPartition) {
         VELOX_USER_FAIL("Partitioning columns must be last");
       }
@@ -900,20 +951,39 @@ void LocalHiveConnectorMetadata::createTable(
   std::string filePath = path + "/.schema";
 
   std::lock_guard<std::mutex> l(mutex_);
-  folly::writeFileAtomic(filePath, jsonStr.data(), jsonStr.size());
+  folly::writeFileAtomic(filePath, jsonStr);
   tables_.erase(tableName);
   loadTable(tableName, path);
+}
+
+void LocalHiveConnectorMetadata::dropTable(const std::string& tableName) {
+  auto path = dataPath() + "/" + tableName;
+  std::lock_guard l{mutex_};
+  tables_.erase(tableName);
+  deleteDirectoryContents(path);
 }
 
 void LocalHiveConnectorMetadata::finishWrite(
     const TableLayout& layout,
     const ConnectorInsertTableHandlePtr& handle,
-    const std::vector<RowVectorPtr>& /*writerResult*/,
     WriteKind /*kind*/,
-    const ConnectorSessionPtr& /*session*/) {
-  std::lock_guard<std::mutex> l(mutex_);
+    const ConnectorSessionPtr& /*session*/,
+    bool success,
+    const std::vector<RowVectorPtr>& /*results*/) {
   auto localHandle = dynamic_cast<const HiveInsertTableHandle*>(handle.get());
+  std::lock_guard l{mutex_};
+  if (!success) {
+    deleteDirectoryContents(localHandle->locationHandle()->writePath());
+    return;
+  }
+  moveFilesRecursively(
+      localHandle->locationHandle()->writePath(),
+      localHandle->locationHandle()->targetPath());
   loadTable(layout.table().name(), localHandle->locationHandle()->targetPath());
+}
+
+std::string LocalHiveConnectorMetadata::makeStagingDirectory() {
+  return createTemporaryDirectory(fmt::format("{}/.staging", dataPath()));
 }
 
 } // namespace facebook::velox::connector::hive

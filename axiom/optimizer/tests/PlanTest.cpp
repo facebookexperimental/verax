@@ -79,9 +79,10 @@ class PlanTest : public test::QueryTestBase {
   void checkSame(
       const lp::LogicalPlanNodePtr& planNode,
       core::PlanNodePtr referencePlan,
-      const axiom::runner::MultiFragmentPlan::Options& options = {
+      const runner::MultiFragmentPlan::Options& options = {
           .numWorkers = 4,
-          .numDrivers = 4}) {
+          .numDrivers = 4,
+      }) {
     VELOX_CHECK_NOT_NULL(planNode);
     VELOX_CHECK_NOT_NULL(referencePlan);
 

@@ -311,6 +311,15 @@ class PlanBuilder {
 
   PlanBuilder& offset(int64_t offset);
 
+  PlanBuilder& tableWrite(
+      std::string connectorId,
+      std::string tableName,
+      WriteKind kind,
+      std::vector<std::string> columnNames,
+      const std::vector<ExprApi>& columnExprs,
+      velox::RowTypePtr outputType = velox::ROW({}),
+      folly::F14FastMap<std::string, std::string> options = {});
+
   PlanBuilder& as(const std::string& alias);
 
   PlanBuilder& captureScope(Scope& scope) {

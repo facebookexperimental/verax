@@ -115,7 +115,7 @@ TEST_F(HiveConnectorMetadataTest, basic) {
 TEST_F(HiveConnectorMetadataTest, createTable) {
   constexpr int32_t kTestSize = 2048;
 
-  auto metadata = dynamic_cast<connector::hive::HiveConnectorMetadata*>(
+  auto metadata = dynamic_cast<connector::hive::LocalHiveConnectorMetadata*>(
       ConnectorMetadata::metadata(velox::exec::test::kHiveConnectorId));
   ASSERT_TRUE(metadata != nullptr);
 
@@ -125,7 +125,7 @@ TEST_F(HiveConnectorMetadataTest, createTable) {
        {"data", BIGINT()},
        {"ds", VARCHAR()}});
 
-  std::unordered_map<std::string, std::string> options = {
+  folly::F14FastMap<std::string, std::string> options = {
       {"bucketed_by", "key1"},
       {"sorted_by", "key1, key2"},
       {"bucket_count", "4"},
@@ -174,7 +174,7 @@ TEST_F(HiveConnectorMetadataTest, createTable) {
   });
 
   auto connectorHandle = metadata->createInsertTableHandle(
-      *layouts[0], tableType, {}, WriteKind::kInsert, session);
+      *layout, tableType, {}, WriteKind::kInsert, session);
 
   auto handle = std::make_shared<core::InsertTableHandle>(
       velox::exec::test::kHiveConnectorId, connectorHandle);
@@ -197,7 +197,7 @@ TEST_F(HiveConnectorMetadataTest, createTable) {
       builder.planNode());
   auto result = exec::test::AssertQueryBuilder(plan).copyResults(pool());
   metadata->finishWrite(
-      *layout, connectorHandle, {result}, WriteKind::kInsert, session);
+      *layout, connectorHandle, WriteKind::kInsert, session, true, {result});
 
   std::string id = "readQ";
   axiom::runner::MultiFragmentPlan::Options runnerOptions = {

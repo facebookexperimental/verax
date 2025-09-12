@@ -183,6 +183,10 @@ const PlanObjectSet& PlanState::downstreamColumns() const {
     }
   }
 
+  if (dt->write && !placed.contains(dt->write)) {
+    result.unionColumns(dt->write->columnExpressions());
+  }
+
   result.unionSet(targetColumns);
   return downstreamPrecomputed[placed] = std::move(result);
 }

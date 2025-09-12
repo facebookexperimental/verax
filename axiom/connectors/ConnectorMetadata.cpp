@@ -18,20 +18,29 @@
 
 namespace facebook::velox::connector {
 
+Variant Column::makeDefaultValue(
+    const TypePtr& type,
+    std::optional<Variant>&& value) {
+  if (value.has_value()) {
+    return std::move(value).value();
+  }
+  return Variant::null(type->kind());
+}
+
 namespace {
 const auto& tableKindNames() {
   static const folly::F14FastMap<TableKind, std::string_view> kNames = {
-      {TableKind::kTable, "kTable"},
-      {TableKind::kTempTable, "kTempTable"},
+      {TableKind::kTable, "TABLE"},
+      {TableKind::kTempTable, "TEMP_TABLE"},
   };
   return kNames;
 }
 
 const auto& writeKindNames() {
   static const folly::F14FastMap<WriteKind, std::string_view> kNames = {
-      {WriteKind::kInsert, "kInsert"},
-      {WriteKind::kUpdate, "kUpdate"},
-      {WriteKind::kDelete, "kDelete"},
+      {WriteKind::kInsert, "INSERT"},
+      {WriteKind::kUpdate, "UPDATE"},
+      {WriteKind::kDelete, "DELETE"},
   };
   return kNames;
 }

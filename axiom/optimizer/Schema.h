@@ -27,6 +27,14 @@
 /// though, so that a schema cache can have its own lifetime.
 namespace facebook::axiom::optimizer {
 
+/// Compares 'first' and 'second' and returns the one that should be
+/// the repartition partitioning to do copartition with the two. If
+/// there is no copartition possibility or if either or both are
+/// nullptr, returns nullptr.
+const velox::connector::PartitionType* copartitionType(
+    const velox::connector::PartitionType* first,
+    const velox::connector::PartitionType* second);
+
 template <typename T>
 using NameMap = std::unordered_map<
     Name,
@@ -114,24 +122,30 @@ class Locus {
 
 using LocusCP = const Locus*;
 
-/// Method for determining a partition given an ordered list of partitioning
-/// keys. Hive hash is an example, range partitioning is another. Add values
-/// here for more types.
-enum class ShuffleMode : uint8_t {
-  kNone,
-  kHive,
-};
-
-/// Distribution of data. 'numPartitions' is 1 if the data is not partitioned.
-/// There is copartitioning if the DistributionType is the same on both sides
-/// and both sides have an equal number of 1:1 type matched partitioning keys.
+/// Distribution of data. This describes a possible partition function
+/// that assigns a row of data to a partition based on some
+/// combination of partition keys. For a join to be copartitioned,
+/// both sides must have compatible partition functions and the join
+/// keys must include the partition keys.  'numPartitions' is 1 if the
+/// data is not partitioned.
 struct DistributionType {
-  bool operator==(const DistributionType& other) const = default;
+  bool operator==(const DistributionType& other) const {
+    return typesCompatible(partitionType, other.partitionType) &&
+        locus == other.locus && isGather == other.isGather;
+  }
+
+  static bool typesCompatible(
+      const velox::connector::PartitionType* left,
+      const velox::connector::PartitionType* right) {
+    return copartitionType(left, right) != nullptr;
+  }
 
   LocusCP locus{nullptr};
+  /// Partition function. nullptr means Velox default,
+  /// copartitioned only with itself.
+  const velox::connector::PartitionType* partitionType{nullptr};
   int32_t numPartitions{1};
   bool isGather{false};
-  ShuffleMode mode{ShuffleMode::kNone};
 
   static DistributionType gather() {
     static constexpr DistributionType kGather = {
@@ -141,8 +155,9 @@ struct DistributionType {
   }
 };
 
-// Describes output of relational operator. If base table, cardinality is
-// after filtering.
+// Describes output of relational operator. If this is partitioned on
+// some keys, distributionType gives the partition function and
+// 'partition' gives the input of the partition function.
 struct Distribution {
   explicit Distribution() = default;
   Distribution(
@@ -370,11 +385,13 @@ struct SchemaTable {
 /// repository. The objects have a default Locus for convenience.
 class Schema {
  public:
-  /// Constructs a testing schema without SchemaResolver.
-  Schema(Name name, const std::vector<SchemaTableCP>& tables, LocusCP locus);
-
   /// Constructs a Schema for producing executable plans, backed by 'source'.
   Schema(Name name, SchemaResolver* source, LocusCP locus);
+
+  struct Table {
+    SchemaTableCP schemaTable{nullptr};
+    velox::connector::TablePtr connectorTable;
+  };
 
   /// Returns the table with 'name' or nullptr if not found, using
   /// the connector specified by connectorId to perform table lookups.
@@ -386,11 +403,9 @@ class Schema {
     return name_;
   }
 
-  void addTable(SchemaTableCP table) const;
-
  private:
   Name name_;
-  mutable NameMap<SchemaTableCP> tables_;
+  mutable NameMap<NameMap<Table>> connectors_;
   SchemaResolver* source_{nullptr};
   LocusCP defaultLocus_;
 };

@@ -133,7 +133,7 @@ class TpchTable : public Table {
     return exportedLayouts_;
   }
 
-  const std::unordered_map<std::string, const Column*>& columnMap()
+  const folly::F14FastMap<std::string, const Column*>& columnMap()
       const override;
 
   void makeDefaultLayout(TpchConnectorMetadata& metadata, double scaleFactor);
@@ -155,7 +155,7 @@ class TpchTable : public Table {
 
   std::unordered_map<std::string, std::unique_ptr<Column>> columns_;
 
-  mutable std::unordered_map<std::string, const Column*> exportedColumns_;
+  mutable folly::F14FastMap<std::string, const Column*> exportedColumns_;
 
   std::vector<std::unique_ptr<TableLayout>> layouts_;
 
@@ -176,7 +176,7 @@ class TpchConnectorMetadata : public ConnectorMetadata {
 
   void initialize() override;
 
-  TablePtr findTable(const std::string& name) override;
+  TablePtr findTable(std::string_view name) override;
 
   ConnectorSplitManager* splitManager() override {
     ensureInitialized();
@@ -201,36 +201,22 @@ class TpchConnectorMetadata : public ConnectorMetadata {
       RowTypePtr dataColumns = nullptr,
       std::optional<LookupKeys> = std::nullopt) override;
 
-  void createTable(
-      const std::string& tableName,
-      const RowTypePtr& rowType,
-      const std::unordered_map<std::string, std::string>& options,
-      const ConnectorSessionPtr& session,
-      bool errorIfExists = true,
-      TableKind tableKind = TableKind::kTable) override {
-    VELOX_UNSUPPORTED();
-  }
-
   ConnectorInsertTableHandlePtr createInsertTableHandle(
       const TableLayout& layout,
       const RowTypePtr& rowType,
-      const std::unordered_map<std::string, std::string>& options,
+      const folly::F14FastMap<std::string, std::string>& options,
       WriteKind kind,
       const ConnectorSessionPtr& session) override {
-    VELOX_UNSUPPORTED();
-  }
-
-  WritePartitionInfo writePartitionInfo(
-      const ConnectorInsertTableHandlePtr& handle) override {
     VELOX_UNSUPPORTED();
   }
 
   void finishWrite(
       const TableLayout& layout,
       const ConnectorInsertTableHandlePtr& handle,
-      const std::vector<RowVectorPtr>& writerResult,
       WriteKind kind,
-      const ConnectorSessionPtr& session) override {
+      const ConnectorSessionPtr& session,
+      bool success,
+      const std::vector<RowVectorPtr>& results) override {
     VELOX_UNSUPPORTED();
   }
 

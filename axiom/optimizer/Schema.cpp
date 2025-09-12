@@ -22,6 +22,15 @@
 
 namespace facebook::axiom::optimizer {
 
+const velox::connector::PartitionType* copartitionType(
+    const velox::connector::PartitionType* first,
+    const velox::connector::PartitionType* second) {
+  if (!first || !second) {
+    return nullptr;
+  }
+  return first->copartition(*second);
+}
+
 float Value::byteSize() const {
   if (type->isFixedWidth()) {
     return static_cast<float>(type->cppSizeInBytes());
@@ -87,33 +96,24 @@ ColumnCP SchemaTable::findColumn(const std::string& name) const {
   return it->second;
 }
 
-Schema::Schema(
-    const char* name,
-    const std::vector<SchemaTableCP>& tables,
-    LocusCP locus)
-    : name_{name}, defaultLocus_{locus} {
-  for (auto& table : tables) {
-    tables_[table->name] = table;
-  }
-}
-
 Schema::Schema(const char* name, SchemaResolver* source, LocusCP locus)
     : name_{name}, source_{source}, defaultLocus_{locus} {}
 
 SchemaTableCP Schema::findTable(
     std::string_view connectorId,
     std::string_view name) const {
-  auto internedName = toName(name);
-  auto it = tables_.find(internedName);
-  if (it != tables_.end()) {
-    return it->second;
+  Name internedConnectorId = toName(connectorId);
+  Name internedName = toName(name);
+  auto& tables = connectors_.try_emplace(internedConnectorId).first->second;
+  auto& table = tables.try_emplace(internedName, Table{}).first->second;
+  if (table.schemaTable) {
+    return table.schemaTable;
   }
 
   VELOX_CHECK_NOT_NULL(source_);
-  auto connectorTable =
-      source_->findTable(std::string(connectorId), std::string(name));
+  auto connectorTable = source_->findTable(connectorId, name);
   if (!connectorTable) {
-    return nullptr;
+    return {};
   }
 
   auto* schemaTable = make<SchemaTable>(
@@ -129,24 +129,46 @@ SchemaTableCP Schema::findTable(
     schemaTable->columns[column->name()] = column;
     columns.push_back(column);
   }
-  DistributionType defaultDistributionType;
-  defaultDistributionType.locus = defaultLocus_;
+  auto findColumn = [&](const std::string& name) -> ColumnCP {
+    auto interned = toName(name);
+    for (auto* column : columns) {
+      if (column->name() == interned) {
+        return column;
+      }
+    }
+    VELOX_FAIL("Partition or order column not in layout columns");
+  };
+
+  auto layout = connectorTable->layouts()[0];
+  DistributionType distribution;
+  distribution.partitionType = layout->partitionType();
+  if (distribution.partitionType &&
+      distribution.partitionType->numPartitions().has_value()) {
+    distribution.numPartitions =
+        distribution.partitionType->numPartitions().value();
+  }
+  distribution.locus = defaultLocus_;
+  ColumnVector partition;
+  for (auto& part : layout->partitionColumns()) {
+    partition.push_back(findColumn(part->name()));
+  }
+  ColumnVector order;
+  for (auto* column : layout->orderColumns()) {
+    order.push_back(findColumn(column->name()));
+  }
+
   schemaTable->addIndex(
       toName("pk"),
-      0,
-      0,
-      {},
-      defaultDistributionType,
-      {},
-      std::move(columns),
-      connectorTable->layouts()[0]);
-  addTable(schemaTable);
-  queryCtx()->optimization()->retainConnectorTable(std::move(connectorTable));
-  return schemaTable;
-}
+      layout->uniquePrifixColumns(),
+      order.size(),
+      order,
+      distribution,
+      partition,
+      columns,
+      layout);
 
-void Schema::addTable(SchemaTableCP table) const {
-  tables_[table->name] = table;
+  table = {schemaTable, std::move(connectorTable)};
+  return table.schemaTable;
 }
 
 float tableCardinality(PlanObjectCP table) {
@@ -435,6 +457,9 @@ std::string Distribution::toString() const {
   std::stringstream out;
   if (!partition.empty()) {
     out << "P ";
+    if (distributionType.partitionType) {
+      out << " " << distributionType.partitionType->toString() << " ";
+    }
     exprsToString(partition, out);
     out << " " << distributionType.numPartitions << " ways";
   }
