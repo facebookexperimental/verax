@@ -76,6 +76,77 @@ TEST_F(HiveQueriesTest, basic) {
           .localPartition({})
           .singleAggregation({"r_name"}, {"count(*)"})
           .planNode());
+
+  checkResults(
+      "SELECT * FROM nation, region",
+      scan("nation")
+          .nestedLoopJoin(
+              scan("region").planNode(),
+              "",
+              {"n_nationkey",
+               "n_name",
+               "n_regionkey",
+               "n_comment",
+               "r_regionkey",
+               "r_name",
+               "r_comment"})
+          .planNode());
+
+  {
+    auto plan = scan("customer")
+                    .nestedLoopJoin(
+                        scan("nation").planNode(),
+                        "",
+                        {"c_custkey",
+                         "c_name",
+                         "c_address",
+                         "c_nationkey",
+                         "c_phone",
+                         "c_acctbal",
+                         "c_mktsegment",
+                         "c_comment",
+                         "n_nationkey",
+                         "n_name",
+                         "n_regionkey",
+                         "n_comment"})
+                    .nestedLoopJoin(
+                        scan("region").planNode(),
+                        "",
+                        {"c_custkey",
+                         "c_name",
+                         "c_address",
+                         "c_nationkey",
+                         "c_phone",
+                         "c_acctbal",
+                         "c_mktsegment",
+                         "c_comment",
+                         "n_nationkey",
+                         "n_name",
+                         "n_regionkey",
+                         "n_comment",
+                         "r_regionkey",
+                         "r_name",
+                         "r_comment"})
+                    .limit(0, 10, false)
+                    .planNode();
+    checkResults("SELECT * FROM customer, nation, region LIMIT 10", plan);
+  }
+
+  checkResults(
+      "SELECT c.c_custkey, n.n_name, r.r_name FROM customer c INNER JOIN nation n ON c.c_nationkey = n.n_regionkey CROSS JOIN region r",
+      scan("customer")
+          .project({"c_custkey", "c_nationkey"})
+          .hashJoin(
+              {"c_nationkey"},
+              {"n_regionkey"},
+              scan("nation").project({"n_name", "n_regionkey"}).planNode(),
+              "",
+              {"c_custkey", "c_nationkey", "n_name"})
+          .nestedLoopJoin(
+              scan("region").project({"r_name"}).planNode(),
+              "",
+              {"c_custkey", "n_name", "r_name"})
+          .planNode());
 }
 
 TEST_F(HiveQueriesTest, crossJoin) {
