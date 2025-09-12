@@ -138,7 +138,7 @@ class VeloxRunner : public QueryBenchmarkBase {
  public:
   void initialize() override {
     initializeMemoryManager();
-    rootPool_ = memory::memoryManager()->addRootPool("velox_sql");
+    rootPool_ = memory::memoryManager()->addRootPool("axiom_sql");
 
     optimizerPool_ = rootPool_->addLeafChild("optimizer");
     checkPool_ = rootPool_->addLeafChild("check");
@@ -1004,8 +1004,8 @@ void checkQueries(VeloxRunner& runner) {
 
 int main(int argc, char** argv) {
   gflags::SetUsageMessage(
-      "Velox local SQL command line. "
-      "Run 'velox_sql --help' for available options.\n");
+      "Axiom local SQL command line. "
+      "Run 'axiom_sql --help' for available options.\n");
 
   folly::Init init(&argc, &argv, false);
 
@@ -1022,7 +1022,7 @@ int main(int argc, char** argv) {
     } else if (!FLAGS_check.empty()) {
       facebook::axiom::checkQueries(runner);
     } else {
-      std::cout << "Velox SQL. Type statement and end with ;.\n"
+      std::cout << "Axiom SQL. Type statement and end with ;.\n"
                    "flag name = value; sets a gflag.\n"
                    "help; prints help text."
                 << std::endl;
