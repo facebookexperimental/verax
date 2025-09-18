@@ -127,12 +127,12 @@ void gatherScans(
 
 } // namespace
 
-TestResult QueryTestBase::runVelox(const core::PlanNodePtr& plan) {
-  axiom::runner::MultiFragmentPlan::Options options = {
-      .queryId = fmt::format("q{}", ++gQueryCounter),
-      .numWorkers = 1,
-      .numDrivers = FLAGS_num_drivers};
-
+TestResult QueryTestBase::runVelox(
+    const velox::core::PlanNodePtr& plan,
+    axiom::runner::MultiFragmentPlan::Options options) {
+  if (options.queryId.empty()) {
+    options.queryId = fmt::format("q{}", ++gQueryCounter);
+  }
   axiom::runner::ExecutableFragment fragment(
       fmt::format("{}.0", options.queryId));
   fragment.fragment = core::PlanFragment(plan);
@@ -144,6 +144,13 @@ TestResult QueryTestBase::runVelox(const core::PlanNodePtr& plan) {
           std::move(options))};
 
   return runFragmentedPlan(planAndStats);
+}
+
+TestResult QueryTestBase::runVelox(const core::PlanNodePtr& plan) {
+  axiom::runner::MultiFragmentPlan::Options options = {
+      .numWorkers = 1, .numDrivers = FLAGS_num_drivers};
+
+  return runVelox(plan, options);
 }
 
 TestResult QueryTestBase::runFragmentedPlan(
