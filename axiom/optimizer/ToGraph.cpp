@@ -374,23 +374,17 @@ PathCP innerPath(std::span<const Step> steps, int32_t last) {
 }
 
 velox::Variant* subscriptLiteral(velox::TypeKind kind, const Step& step) {
-  auto* ctx = queryCtx();
   switch (kind) {
     case velox::TypeKind::VARCHAR:
-      return ctx->registerVariant(
-          std::make_unique<velox::Variant>(std::string(step.field)));
+      return registerVariant(std::string{step.field});
     case velox::TypeKind::BIGINT:
-      return ctx->registerVariant(
-          std::make_unique<velox::Variant>(static_cast<int64_t>(step.id)));
+      return registerVariant(static_cast<int64_t>(step.id));
     case velox::TypeKind::INTEGER:
-      return ctx->registerVariant(
-          std::make_unique<velox::Variant>(static_cast<int32_t>(step.id)));
+      return registerVariant(static_cast<int32_t>(step.id));
     case velox::TypeKind::SMALLINT:
-      return ctx->registerVariant(
-          std::make_unique<velox::Variant>(static_cast<int16_t>(step.id)));
+      return registerVariant(static_cast<int16_t>(step.id));
     case velox::TypeKind::TINYINT:
-      return ctx->registerVariant(
-          std::make_unique<velox::Variant>(static_cast<int8_t>(step.id)));
+      return registerVariant(static_cast<int8_t>(step.id));
     default:
       VELOX_FAIL("Unsupported key type");
   }
@@ -1332,7 +1326,7 @@ PlanObjectP ToGraph::addProjection(const lp::ProjectNode* project) {
   auto channels = usedChannels(*project);
   trace(OptimizerOptions::kPreprocess, [&]() {
     for (auto i = 0; i < exprs.size(); ++i) {
-      if (std::find(channels.begin(), channels.end(), i) == channels.end()) {
+      if (std::ranges::find(channels, i) == channels.end()) {
         std::cout << "P=" << project->id()
                   << " dropped projection name=" << names[i] << " = "
                   << lp::ExprPrinter::toText(*exprs[i]) << std::endl;
@@ -1394,6 +1388,78 @@ PlanObjectP ToGraph::addLimit(const lp::LimitNode& limitNode) {
     currentDt_->limit = limitNode.count();
     currentDt_->offset = limitNode.offset();
   }
+
+  return currentDt_;
+}
+
+PlanObjectP ToGraph::addWrite(const lp::TableWriteNode& tableWrite) {
+  if (tableWrite.kind() != lp::WriteKind::kInsert) {
+    VELOX_NYI("Only INSERT supported for TableWrite");
+  }
+  VELOX_CHECK_NULL(currentDt_->write, "Only one TableWrite allowed");
+  const auto* schemaTable =
+      schema_.findTable(tableWrite.connectorId(), tableWrite.tableName());
+  VELOX_CHECK_NOT_NULL(
+      schemaTable,
+      "Table not found: {} via connector {}",
+      tableWrite.tableName(),
+      tableWrite.connectorId());
+  VELOX_CHECK_EQ(
+      schemaTable->columnGroups.size(),
+      1,
+      "Only one materialization supported for table write");
+  const auto* tableLayout = schemaTable->columnGroups[0]->layout;
+  VELOX_DCHECK_NOT_NULL(tableLayout);
+  const auto& tableRow = *tableLayout->rowType();
+
+  NameVector columnNames;
+  ExprVector columnExpressions;
+  columnNames.reserve(tableRow.size());
+  columnExpressions.reserve(tableRow.size());
+  for (uint32_t i = 0; i < tableRow.size(); ++i) {
+    const auto& columnName = tableRow.nameOf(i);
+    columnNames.push_back(toName(columnName));
+    const auto& columnType = tableRow.childAt(i);
+
+    auto it = std::ranges::find(tableWrite.columnNames(), columnName);
+    if (it != tableWrite.columnNames().end()) {
+      const auto nth = it - tableWrite.columnNames().begin();
+      const auto& columnExpression = tableWrite.columnExpressions()[nth];
+      columnExpressions.push_back(translateExpr(columnExpression));
+    } else {
+      const auto* tableColumn = tableLayout->table().findColumn(columnName);
+      VELOX_DCHECK_NOT_NULL(tableColumn);
+      const auto& defaultValue = *registerVariant(tableColumn->defaultValue());
+      columnExpressions.push_back(make<Literal>(
+          Value{toType(defaultValue.inferType()), 1}, &defaultValue));
+    }
+    VELOX_DCHECK(*columnType == *columnExpressions.back()->value().type);
+  }
+
+  renames_.clear();
+  ColumnVector outputColumns;
+  const auto& outputType = *tableWrite.outputType();
+  outputColumns.reserve(outputType.size());
+  for (uint32_t i = 0; i < outputType.size(); ++i) {
+    const auto& name = outputType.nameOf(i);
+    const auto* columnName = toName(name);
+    outputColumns.push_back(make<Column>(
+        columnName,
+        currentDt_,
+        Value{toType(outputType.childAt(i)), 1},
+        columnName));
+    renames_[name] = outputColumns.back();
+  }
+
+  currentDt_->write = make<WritePlan>(
+      *tableLayout,
+      static_cast<connector::WriteKind>(tableWrite.kind()),
+      std::move(columnNames),
+      std::move(columnExpressions),
+      std::move(outputColumns),
+      tableWrite.options());
+
+  finalizeDt(tableWrite, nullptr);
 
   return currentDt_;
 }
@@ -1734,6 +1800,10 @@ PlanObjectP ToGraph::makeQueryGraph(
       return currentDt_;
     }
 
+    case lp::NodeKind::kTableWrite:
+      wrapInDt(*node.onlyInput());
+      return addWrite(*node.asUnchecked<lp::TableWriteNode>());
+
     default:
       VELOX_NYI(
           "Unsupported PlanNode {}", lp::NodeKindName::toName(node.kind()));
@@ -1746,7 +1816,7 @@ extern std::string leString(const lp::Expr* e) {
   return lp::ExprPrinter::toText(*e);
 }
 
-extern std::string pString(const lp::LogicalPlanNode* p) {
+extern std::string lpString(const lp::LogicalPlanNode* p) {
   return lp::PlanPrinter::toText(*p);
 }
 

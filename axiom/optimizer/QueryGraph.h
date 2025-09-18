@@ -919,4 +919,56 @@ class AggregationPlan : public PlanObject {
 
 using AggregationPlanCP = const AggregationPlan*;
 
+using NameVector = std::vector<Name, QGAllocator<Name>>;
+
+class WritePlan : public PlanObject {
+ public:
+  WritePlan(
+      const connector::TableLayout& layout,
+      connector::WriteKind kind,
+      NameVector columnNames,
+      ExprVector columnExpressions,
+      ColumnVector output,
+      const folly::F14FastMap<std::string, std::string>& options)
+      : PlanObject{PlanType::kWriteNode},
+        layout_{layout},
+        kind_{kind},
+        columnNames_{std::move(columnNames)},
+        columnExpressions_{std::move(columnExpressions)},
+        output_{std::move(output)},
+        options_{options} {}
+
+  const connector::TableLayout& layout() const {
+    return layout_;
+  }
+
+  connector::WriteKind kind() const {
+    return kind_;
+  }
+
+  const NameVector& columnNames() const {
+    return columnNames_;
+  }
+
+  const ExprVector& columnExpressions() const {
+    return columnExpressions_;
+  }
+
+  const ColumnVector& output() const {
+    return output_;
+  }
+
+  const folly::F14FastMap<std::string, std::string>& options() const {
+    return options_;
+  }
+
+ private:
+  const connector::TableLayout& layout_;
+  connector::WriteKind kind_;
+  NameVector columnNames_;
+  ExprVector columnExpressions_;
+  ColumnVector output_;
+  const folly::F14FastMap<std::string, std::string>& options_;
+};
+
 } // namespace facebook::axiom::optimizer

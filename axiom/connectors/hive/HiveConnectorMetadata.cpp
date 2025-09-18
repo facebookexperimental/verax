@@ -21,6 +21,55 @@
 
 namespace facebook::axiom::connector::hive {
 
+const PartitionType* HivePartitionType::copartition(
+    const PartitionType& any) const {
+  if (const auto* hivePartitionType =
+          dynamic_cast<const HivePartitionType*>(&any)) {
+    const auto& myTypes = partitionKeyTypes();
+    const auto& otherTypes = hivePartitionType->partitionKeyTypes();
+
+    if (myTypes.size() == otherTypes.size()) {
+      bool typesCompatible = true;
+      for (size_t i = 0; i < myTypes.size(); ++i) {
+        if (!myTypes[i]->equivalent(*otherTypes[i])) {
+          typesCompatible = false;
+          break;
+        }
+      }
+
+      if (typesCompatible) {
+        if (numBuckets_ % hivePartitionType->numBuckets_ == 0) {
+          return hivePartitionType;
+        } else if (hivePartitionType->numBuckets_ % numBuckets_ == 0) {
+          return this;
+        }
+      }
+    }
+  }
+  return nullptr;
+}
+
+velox::core::PartitionFunctionSpecPtr HivePartitionType::makeSpec(
+    const std::vector<velox::column_index_t>& channels,
+    const std::vector<velox::VectorPtr>& constants,
+    bool isLocal) const {
+  return std::make_shared<velox::connector::hive::HivePartitionFunctionSpec>(
+      numBuckets_, channels, constants);
+}
+
+std::string HivePartitionType::toString() const {
+  std::string typeNames;
+  if (!partitionKeyTypes_.empty()) {
+    std::vector<std::string> typeStrs;
+    typeStrs.reserve(partitionKeyTypes_.size());
+    for (const auto& type : partitionKeyTypes_) {
+      typeStrs.push_back(type->toString());
+    }
+    typeNames = " [" + folly::join(", ", typeStrs) + "]";
+  }
+  return fmt::format("Hive {} buckets{}", numBuckets_, typeNames);
+}
+
 namespace {
 velox::connector::hive::HiveColumnHandle::ColumnType columnType(
     const HiveTableLayout& layout,
@@ -181,7 +230,7 @@ HiveConnectorMetadata::createInsertTableHandle(
       inputColumns,
       makeLocationHandle(
           fmt::format("{}/{}", dataPath(), layout.table().name()),
-          std::nullopt),
+          makeStagingDirectory()),
       storageFormat,
       bucketProperty,
       compressionKind,
@@ -192,15 +241,16 @@ HiveConnectorMetadata::createInsertTableHandle(
 
 void HiveConnectorMetadata::validateOptions(
     const folly::F14FastMap<std::string, std::string>& options) const {
-  static folly::F14FastSet<std::string> allowed = {
+  static const folly::F14FastSet<std::string> kAllowed = {
       "bucketed_by",
       "sorted_by",
       "bucket_count",
       "partitioned_by",
       "file_format",
-      "compression_kind"};
+      "compression_kind",
+  };
   for (auto& pair : options) {
-    if (allowed.find(pair.first) == allowed.end()) {
+    if (!kAllowed.contains(pair.first)) {
       VELOX_USER_FAIL("Option {} is not supported", pair.first);
     }
   }

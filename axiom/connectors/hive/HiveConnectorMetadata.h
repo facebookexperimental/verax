@@ -45,6 +45,39 @@ class HiveConnectorSession : public ConnectorSession {
   ~HiveConnectorSession() override = default;
 };
 
+class HivePartitionType : public connector::PartitionType {
+ public:
+  HivePartitionType(
+      int32_t numBuckets,
+      std::vector<velox::TypePtr> partitionKeyTypes = {})
+      : numBuckets_(numBuckets),
+        partitionKeyTypes_(std::move(partitionKeyTypes)) {}
+
+  std::optional<int32_t> numPartitions() const override {
+    return numBuckets_;
+  }
+
+  // Types are compatible if the bucket count one is an interger multiple of the
+  // other. The partition to use for copartitioning is the one with the fewer
+  // buckets.
+  const PartitionType* copartition(const PartitionType& any) const override;
+
+  velox::core::PartitionFunctionSpecPtr makeSpec(
+      const std::vector<velox::column_index_t>& channels,
+      const std::vector<velox::VectorPtr>& constants,
+      bool isLocal) const override;
+
+  const std::vector<velox::TypePtr>& partitionKeyTypes() const override {
+    return partitionKeyTypes_;
+  }
+
+  std::string toString() const override;
+
+ private:
+  const int32_t numBuckets_;
+  const std::vector<velox::TypePtr> partitionKeyTypes_;
+};
+
 /// Describes a Hive table layout. Adds a file format and a list of
 /// Hive partitioning columns and an optional bucket count to the base
 /// TableLayout. The partitioning in TableLayout referes to bucketing.
@@ -55,7 +88,7 @@ class HiveConnectorSession : public ConnectorSession {
 class HiveTableLayout : public TableLayout {
  public:
   HiveTableLayout(
-      const std::string& name,
+      std::string name,
       const Table* table,
       velox::connector::Connector* connector,
       std::vector<const Column*> columns,
@@ -66,19 +99,17 @@ class HiveTableLayout : public TableLayout {
       std::vector<const Column*> hivePartitionColumns,
       velox::dwio::common::FileFormat fileFormat,
       std::optional<int32_t> numBuckets = std::nullopt)
-      : TableLayout(
-            name,
-            table,
-            connector,
-            columns,
-            partitioning,
-            orderColumns,
-            sortOrder,
-            lookupKeys,
-            true),
-        fileFormat_(fileFormat),
-        hivePartitionColumns_(hivePartitionColumns),
-        numBuckets_(numBuckets) {}
+      : TableLayout{std::move(name), table, connector, std::move(columns), std::move(partitioning), std::move(orderColumns), std::move(sortOrder), std::move(lookupKeys), true},
+        fileFormat_{fileFormat},
+        hivePartitionColumns_{std::move(hivePartitionColumns)},
+        numBuckets_{numBuckets},
+        partitionType_{
+            numBuckets.value_or(0),
+            extractPartitionKeyTypes(partitionColumns())} {}
+
+  const PartitionType* partitionType() const override {
+    return partitionColumns().empty() ? nullptr : &partitionType_;
+  }
 
   velox::dwio::common::FileFormat fileFormat() const {
     return fileFormat_;
@@ -96,6 +127,19 @@ class HiveTableLayout : public TableLayout {
   const velox::dwio::common::FileFormat fileFormat_;
   const std::vector<const Column*> hivePartitionColumns_;
   const std::optional<int32_t> numBuckets_;
+
+ private:
+  static std::vector<velox::TypePtr> extractPartitionKeyTypes(
+      const std::vector<const Column*>& partitionColumns) {
+    std::vector<velox::TypePtr> types;
+    types.reserve(partitionColumns.size());
+    for (const auto* column : partitionColumns) {
+      types.push_back(column->type());
+    }
+    return types;
+  }
+
+  const HivePartitionType partitionType_;
 };
 
 class HiveConnectorMetadata : public ConnectorMetadata {
@@ -129,27 +173,13 @@ class HiveConnectorMetadata : public ConnectorMetadata {
       WriteKind kind,
       const ConnectorSessionPtr& session) override;
 
-  void createTable(
-      const std::string& tableName,
-      const velox::RowTypePtr& rowType,
-      const folly::F14FastMap<std::string, std::string>& options,
-      const ConnectorSessionPtr& session,
-      bool errorIfExists = true,
-      TableKind tableKind = TableKind::kTable) override {
-    VELOX_UNSUPPORTED();
-  }
-
   void finishWrite(
       const TableLayout& layout,
       const velox::connector::ConnectorInsertTableHandlePtr& handle,
-      const std::vector<velox::RowVectorPtr>& writerResult,
       WriteKind kind,
-      const ConnectorSessionPtr& session) override {
-    VELOX_UNSUPPORTED();
-  }
-
-  WritePartitionInfo writePartitionInfo(
-      const velox::connector::ConnectorInsertTableHandlePtr& handle) override {
+      const ConnectorSessionPtr& session,
+      bool success,
+      const std::vector<velox::RowVectorPtr>& results) override {
     VELOX_UNSUPPORTED();
   }
 
@@ -178,6 +208,10 @@ class HiveConnectorMetadata : public ConnectorMetadata {
   /// 'this'. Directories inside this correspond to schemas and
   /// tables.
   virtual std::string dataPath() const = 0;
+
+  virtual std::string makeStagingDirectory() {
+    VELOX_UNSUPPORTED();
+  }
 
   velox::connector::hive::HiveConnector* const hiveConnector_;
   const std::shared_ptr<velox::connector::hive::HiveConfig> hiveConfig_;

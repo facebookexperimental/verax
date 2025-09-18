@@ -645,12 +645,79 @@ void alignJoinSides(
   otherInput = repartition;
 }
 
+RelationOpPtr repartitionForWrite(const RelationOpPtr& plan, PlanState& state) {
+  if (isSingleWorker() || plan->distribution().distributionType.isGather) {
+    return plan;
+  }
+
+  const auto& write = *state.dt->write;
+  const auto& layout = write.layout();
+  const auto& partitionColumns = layout.partitionColumns();
+  if (partitionColumns.empty()) {
+    // The write is not partitioned on columns of the layout.
+    // ToVelox will add an arbitrary repartition regardless of the plan.
+    return plan;
+  }
+
+  ExprVector partitionKeys;
+  for (const auto* column : partitionColumns) {
+    // find the expression for each partition column.
+    const auto* columnName = toName(column->name());
+    auto it = std::ranges::find(write.columnNames(), columnName);
+    VELOX_CHECK(
+        it != write.columnNames().end(),
+        "No value for partition column {}",
+        column->name());
+    const auto nth = it - write.columnNames().begin();
+    partitionKeys.push_back(write.columnExpressions()[nth]);
+  }
+
+  const auto* copartition = copartitionType(
+      plan->distribution().distributionType.partitionType,
+      layout.partitionType());
+  // Copartitioning is possible if PartitionTypes are compatible
+  // and the table has no fewer partitions than the plan.
+  bool needsShuffle = !copartition || copartition == layout.partitionType();
+  if (!needsShuffle) {
+    // Check that the partition keys of the plan are assigned pairwise to the
+    // partition columns of the layout.
+    for (size_t i = 0; i < partitionKeys.size(); ++i) {
+      const auto* key = partitionKeys[i];
+      auto nthKey = position(plan->distribution().partition, *key);
+      if (nthKey != i) {
+        needsShuffle = true;
+        break;
+      }
+    }
+  }
+  if (!needsShuffle) {
+    return plan;
+  }
+
+  Distribution distribution{
+      plan->distribution().distributionType, std::move(partitionKeys)};
+  auto outputColumns = plan->columns();
+  auto* repartition = make<Repartition>(
+      plan, std::move(distribution), std::move(outputColumns));
+  state.addCost(*repartition);
+  return repartition;
+}
+
 } // namespace
 
 void Optimization::addPostprocess(
     DerivedTableCP dt,
     RelationOpPtr& plan,
     PlanState& state) const {
+  if (dt->write) {
+    VELOX_DCHECK(!dt->hasAggregation());
+    VELOX_DCHECK(!dt->hasOrderBy());
+    VELOX_DCHECK(!dt->hasLimit());
+    plan = repartitionForWrite(plan, state);
+    plan = make<TableWrite>(plan, dt->write);
+    return;
+  }
+
   if (dt->aggregation) {
     const auto& aggPlan = dt->aggregation;
 

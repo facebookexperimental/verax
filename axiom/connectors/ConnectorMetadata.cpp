@@ -18,6 +18,15 @@
 
 namespace facebook::axiom::connector {
 
+velox::Variant Column::makeDefaultValue(
+    const velox::TypePtr& type,
+    std::optional<velox::Variant>&& value) {
+  if (value.has_value()) {
+    return std::move(value).value();
+  }
+  return velox::Variant::null(type->kind());
+}
+
 namespace {
 const auto& tableKindNames() {
   static const folly::F14FastMap<TableKind, std::string_view> kNames = {

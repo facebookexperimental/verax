@@ -15,6 +15,7 @@
  */
 
 #include <algorithm>
+#include <utility>
 
 #include "axiom/optimizer/Optimization.h"
 #include "axiom/optimizer/Plan.h"
@@ -844,6 +845,48 @@ std::string UnionAll::toString(bool recursive, bool detail) const {
     }
   }
   out << ")";
+  return out.str();
+}
+
+TableWrite::TableWrite(RelationOpPtr input, const WritePlan* write)
+    : RelationOp{RelType::kTableWrite, std::move(input), Distribution{}, write->output()},
+      write{write} {
+  cost_.inputCardinality = inputCardinality();
+  cost_.unitCost = 0.01;
+}
+
+std::string TableWrite::toString(bool recursive, bool detail) const {
+  std::stringstream out;
+  if (recursive) {
+    out << input()->toString(true, detail) << " ";
+  }
+
+  const auto& columnNames = write->columnNames();
+  if (detail) {
+    out << fmt::format(
+        "TableWrite to {} ({} columns)",
+        write->layout().table().name(),
+        columnNames.size());
+
+    if (!columnNames.empty()) {
+      out << " expressions:";
+      const auto& columnExpressions = write->columnExpressions();
+      for (size_t i = 0; i < columnNames.size(); ++i) {
+        out << " " << columnNames[i] << "=" << columnExpressions[i]->toString();
+        if (i < columnExpressions.size() - 1) {
+          out << ", ";
+        }
+      }
+    }
+
+    printCost(detail, out);
+  } else {
+    out << fmt::format(
+        "TableWrite {} columns to {}",
+        columnNames.size(),
+        write->layout().table().name());
+  }
+
   return out.str();
 }
 
