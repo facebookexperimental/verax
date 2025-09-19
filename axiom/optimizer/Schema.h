@@ -116,31 +116,14 @@ class Locus {
 
 using LocusCP = const Locus*;
 
-/// Method for determining a partition given an ordered list of partitioning
-/// keys. Hive hash is an example, range partitioning is another. Add values
-/// here for more types.
-enum class ShuffleMode : uint8_t {
-  kNone,
-  kHive,
-};
-
-/// Distribution of data. 'numPartitions' is 1 if the data is not partitioned.
-/// There is copartitioning if the DistributionType is the same on both sides
-/// and both sides have an equal number of 1:1 type matched partitioning keys.
+/// Distribution of data.
+/// 'partitionType' is nullptr if the data is not partitioned
+/// by some connector specific function.
 struct DistributionType {
-  bool operator==(const DistributionType& other) const = default;
-
   LocusCP locus{nullptr};
-  int32_t numPartitions{1};
+  const connector::PartitionType* partitionType{nullptr};
   bool isGather{false};
-  ShuffleMode mode{ShuffleMode::kNone};
-
-  static DistributionType gather() {
-    static constexpr DistributionType kGather = {
-        .isGather = true,
-    };
-    return kGather;
-  }
+  bool isBroadcast{false};
 };
 
 // Describes output of relational operator. If base table, cardinality is
@@ -164,10 +147,11 @@ struct Distribution {
   }
 
   /// Returns a Distribution for use in a broadcast shuffle.
-  static Distribution broadcast(DistributionType distributionType) {
-    Distribution distribution{distributionType, {}};
-    distribution.isBroadcast = true;
-    return distribution;
+  static Distribution broadcast() {
+    static constexpr DistributionType kBroadcast = {
+        .isBroadcast = true,
+    };
+    return {kBroadcast, {}};
   }
 
   /// Returns a distribution for an end of query gather from last stage
@@ -176,13 +160,21 @@ struct Distribution {
   static Distribution gather(
       ExprVector orderKeys = {},
       OrderTypeVector orderTypes = {}) {
+    static constexpr DistributionType kGather = {
+        .isGather = true,
+    };
     return {
-        DistributionType::gather(),
+        kGather,
         {},
         std::move(orderKeys),
         std::move(orderTypes),
     };
   }
+
+  /// Returns true if 'this' and 'other' can be the same partitioning.
+  /// Returns false if definitely not the same partitioning.
+  /// Returns nullopt if not enough information to decide.
+  std::optional<bool> canBeSamePartition(const Distribution& other) const;
 
   /// True if 'this' and 'other' have the same number/type of keys and same
   /// distribution type. Data is copartitioned if both sides have a 1:1
@@ -224,9 +216,6 @@ struct Distribution {
   // index join with lineitem would skip 4000 rows between hits
   // because lineitem has an average of 4 repeats of orderkey.
   float spacing{-1};
-
-  // True if the data is replicated to 'numPartitions'.
-  bool isBroadcast{false};
 };
 
 struct SchemaTable;

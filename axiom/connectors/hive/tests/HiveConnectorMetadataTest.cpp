@@ -173,7 +173,7 @@ TEST_F(HiveConnectorMetadataTest, createTable) {
   });
 
   auto connectorHandle = metadata->createInsertTableHandle(
-      *layouts[0], tableType, {}, WriteKind::kInsert, session);
+      *layout, tableType, {}, WriteKind::kInsert, session);
 
   auto handle = std::make_shared<core::InsertTableHandle>(
       velox::exec::test::kHiveConnectorId, connectorHandle);
@@ -196,7 +196,7 @@ TEST_F(HiveConnectorMetadataTest, createTable) {
       builder.planNode());
   auto result = exec::test::AssertQueryBuilder(plan).copyResults(pool());
   metadata->finishWrite(
-      *layout, connectorHandle, {result}, WriteKind::kInsert, session);
+      *layout, connectorHandle, WriteKind::kInsert, session, true, {result});
 
   std::string id = "readQ";
   runner::MultiFragmentPlan::Options runnerOptions = {

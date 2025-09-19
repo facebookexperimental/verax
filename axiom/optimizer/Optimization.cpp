@@ -416,10 +416,9 @@ RelationOpPtr repartitionForAgg(const RelationOpPtr& plan, PlanState& state) {
 
   const auto* agg = state.dt->aggregation;
 
-  // If no grouping and not yet gathered on a single node, add a gather before
-  // final agg.
-  if (agg->groupingKeys().empty() &&
-      !plan->distribution().distributionType.isGather) {
+  // If no grouping and not yet gathered on a single node,
+  // add a gather before final agg.
+  if (agg->groupingKeys().empty()) {
     auto* gather =
         make<Repartition>(plan, Distribution::gather(), plan->columns());
     state.addCost(*gather);
@@ -468,34 +467,18 @@ bool isIndexColocated(
     const ExprVector& lookupValues,
     const RelationOpPtr& input) {
   const auto& distribution = info.index->distribution;
-  if (distribution.isBroadcast &&
-      input->distribution().distributionType.locus ==
-          distribution.distributionType.locus) {
-    return true;
+  if (auto canBe = input->distribution().canBeSamePartition(distribution)) {
+    return *canBe;
   }
-
   // True if 'input' is partitioned so that each partitioning key is joined to
   // the corresponding partition key in 'info'.
-  if (input->distribution().distributionType != distribution.distributionType) {
-    return false;
-  }
-
-  if (input->distribution().partition.empty()) {
-    return false;
-  }
-
-  if (input->distribution().partition.size() != distribution.partition.size()) {
-    return false;
-  }
-
-  for (auto i = 0; i < input->distribution().partition.size(); ++i) {
+  for (size_t i = 0; i < input->distribution().partition.size(); ++i) {
     auto nthKey = position(lookupValues, *input->distribution().partition[i]);
-    if (nthKey != kNotFound) {
-      if (info.schemaColumn(info.lookupKeys.at(nthKey)) !=
-          distribution.partition.at(i)) {
-        return false;
-      }
-    } else {
+    if (nthKey == kNotFound) {
+      return false;
+    }
+    if (info.schemaColumn(info.lookupKeys[nthKey]) !=
+        distribution.partition[i]) {
       return false;
     }
   }
@@ -871,9 +854,7 @@ void Optimization::joinByHash(
         candidate.join->isBroadcastableType() &&
         isBroadcastableSize(buildPlan, state)) {
       auto* broadcast = make<Repartition>(
-          buildInput,
-          Distribution::broadcast(plan->distribution().distributionType),
-          buildInput->columns());
+          buildInput, Distribution::broadcast(), buildInput->columns());
       buildState.addCost(*broadcast);
       buildInput = broadcast;
     } else {
@@ -1170,7 +1151,7 @@ RelationOpPtr Optimization::placeSingleRowDt(
   memoKey.tables.add(subquery);
   memoKey.columns.unionObjects(subquery->columns);
 
-  const auto broadcast = Distribution::broadcast({});
+  const auto broadcast = Distribution::broadcast();
 
   PlanObjectSet empty;
   bool needsShuffle = false;
@@ -1368,8 +1349,6 @@ Distribution somePartition(const RelationOpPtrVector& inputs) {
   }
 
   DistributionType distributionType;
-  distributionType.numPartitions =
-      queryCtx()->optimization()->runnerOptions().numWorkers;
   distributionType.locus = firstInput->distribution().distributionType.locus;
 
   return {distributionType, std::move(columns)};
