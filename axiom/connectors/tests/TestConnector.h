@@ -355,7 +355,7 @@ class TestDataSource : public velox::connector::DataSource {
     return completedRows_;
   }
 
-  std::unordered_map<std::string, velox::RuntimeCounter> runtimeStats()
+  std::unordered_map<std::string, velox::RuntimeMetric> runtimeStats()
       override {
     return {};
   }
