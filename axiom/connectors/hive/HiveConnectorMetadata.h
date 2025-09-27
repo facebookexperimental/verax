@@ -122,20 +122,19 @@ class HiveConnectorMetadata : public ConnectorMetadata {
       velox::RowTypePtr dataColumns,
       std::optional<LookupKeys> lookupKeys) override;
 
-  velox::connector::ConnectorInsertTableHandlePtr createInsertTableHandle(
-      const TableLayout& layout,
-      const velox::RowTypePtr& rowType,
-      const folly::F14FastMap<std::string, std::string>& options,
-      WriteKind kind,
-      const ConnectorSessionPtr& session) override;
-
-  void createTable(
+  TablePtr createTable(
       const std::string& tableName,
       const velox::RowTypePtr& rowType,
       const folly::F14FastMap<std::string, std::string>& options,
-      const ConnectorSessionPtr& session,
-      bool errorIfExists = true,
-      TableKind tableKind = TableKind::kTable) override {
+      const ConnectorSessionPtr& session) override {
+    VELOX_UNSUPPORTED();
+  }
+
+  velox::connector::ConnectorInsertTableHandlePtr beginWrite(
+      const TableLayout& layout,
+      const folly::F14FastMap<std::string, std::string>& options,
+      WriteKind kind,
+      const ConnectorSessionPtr& session) override {
     VELOX_UNSUPPORTED();
   }
 
@@ -164,6 +163,14 @@ class HiveConnectorMetadata : public ConnectorMetadata {
 
   virtual void validateOptions(
       const folly::F14FastMap<std::string, std::string>& options) const;
+
+  virtual velox::connector::ConnectorInsertTableHandlePtr
+  createInsertTableHandle(
+      const TableLayout& layout,
+      const velox::RowTypePtr& rowType,
+      const folly::F14FastMap<std::string, std::string>& options,
+      WriteKind kind,
+      const ConnectorSessionPtr& session);
 
   virtual std::shared_ptr<velox::connector::hive::LocationHandle>
   makeLocationHandle(

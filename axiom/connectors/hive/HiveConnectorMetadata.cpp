@@ -116,7 +116,9 @@ HiveConnectorMetadata::createInsertTableHandle(
     WriteKind kind,
     const ConnectorSessionPtr& session) {
   ensureInitialized();
-  VELOX_CHECK_EQ(kind, WriteKind::kInsert, "Only insert supported");
+  VELOX_CHECK(
+      kind == WriteKind::kCreate || kind == WriteKind::kInsert,
+      "Only create/insert supported");
 
   auto* hiveLayout = dynamic_cast<const HiveTableLayout*>(&layout);
   VELOX_CHECK_NOT_NULL(hiveLayout);

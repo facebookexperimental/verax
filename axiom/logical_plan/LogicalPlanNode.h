@@ -660,21 +660,25 @@ using UnnestNodePtr = std::shared_ptr<const UnnestNode>;
 /// Specifies what type of write is intended when initiating or concluding a
 /// write operation.
 enum class WriteKind {
-  // Rows are added and all columns must be specified for the TableWriter. This
-  // covers insert, create table and replacing a Hive partition and any other
-  // use that adds whole rows.
-  kInsert = 1,
+  // A write operation to a new table which does not yet exist in the connector.
+  // Covers both creation of an empty table and create as select operations.
+  kCreate = 1,
+
+  // Rows are added and all columns must be specified for the TableWriter.
+  // Covers insert, Hive partition replacement or any other operation which adds
+  // whole rows.
+  kInsert = 2,
 
   // Individual rows are deleted. Only row ids as per
   // ConnectorMetadata::rowIdHandles() are passed to the TableWriter.
-  kDelete = 2,
+  kDelete = 3,
 
   // Column values in individual rows are changed. The TableWriter
   // gets first the row ids as per ConnectorMetadata::rowIdHandles()
   // and then new values for the columns being changed. The new values
   // may overlap with row ids if the row id is a set of primary key
   // columns.
-  kUpdate = 3,
+  kUpdate = 4,
 };
 
 AXIOM_DECLARE_ENUM_NAME(WriteKind);
@@ -685,7 +689,7 @@ class TableWriteNode : public LogicalPlanNode {
   /// @param id Unique ID of the plan node.
   /// @param connectorId ID of the connector to use to access the table.
   /// @param tableName Table name.
-  /// @param kind Indicates the type of write (insert/delete/update)
+  /// @param kind Indicates the type of write (create/insert/delete/update)
   /// @param columnNames A List of columns in the table being written.
   /// Correspond 1:1 to 'columnExpressions'. 'columnNames' must refer to columns
   /// in the table but their number or order does not have to correspond to the

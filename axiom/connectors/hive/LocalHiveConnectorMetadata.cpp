@@ -806,23 +806,16 @@ void createDir(const std::string& path) {
 }
 } // namespace
 
-void LocalHiveConnectorMetadata::createTable(
+TablePtr LocalHiveConnectorMetadata::createTable(
     const std::string& tableName,
     const velox::RowTypePtr& rowType,
     const folly::F14FastMap<std::string, std::string>& options,
-    const ConnectorSessionPtr& session,
-    bool errorIfExists,
-    TableKind kind) {
-  VELOX_CHECK_EQ(kind, TableKind::kTable);
+    const ConnectorSessionPtr& session) {
   validateOptions(options);
   ensureInitialized();
   auto path = tablePath(tableName);
   if (dirExists(path)) {
-    if (errorIfExists) {
-      VELOX_USER_FAIL("Table {} already exists", tableName);
-    } else {
-      return;
-    }
+    VELOX_USER_FAIL("Table {} already exists", tableName);
   } else {
     createDir(path);
   }
@@ -912,9 +905,23 @@ void LocalHiveConnectorMetadata::createTable(
   std::string filePath = path + "/.schema";
 
   std::lock_guard<std::mutex> l(mutex_);
+  VELOX_USER_CHECK_NULL(
+      findTableLocked(tableName), "table {} already exists", tableName);
   folly::writeFileAtomic(filePath, jsonStr.data(), jsonStr.size());
-  tables_.erase(tableName);
   loadTable(tableName, path);
+  auto table = findTableLocked(tableName);
+  tables_.erase(tableName);
+  return table;
+}
+
+velox::connector::ConnectorInsertTableHandlePtr
+LocalHiveConnectorMetadata::beginWrite(
+    const TableLayout& layout,
+    const folly::F14FastMap<std::string, std::string>& options,
+    WriteKind kind,
+    const ConnectorSessionPtr& session) {
+  return createInsertTableHandle(
+      layout, layout.rowType(), options, kind, session);
 }
 
 void LocalHiveConnectorMetadata::finishWrite(
@@ -927,7 +934,8 @@ void LocalHiveConnectorMetadata::finishWrite(
   auto localHandle =
       dynamic_cast<const velox::connector::hive::HiveInsertTableHandle*>(
           handle.get());
-  loadTable(layout.table().name(), localHandle->locationHandle()->targetPath());
+  auto targetPath = localHandle->locationHandle()->targetPath();
+  loadTable(layout.table().name(), targetPath);
 }
 
 } // namespace facebook::axiom::connector::hive

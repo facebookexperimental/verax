@@ -133,11 +133,47 @@ TEST_F(HiveConnectorMetadataTest, createTable) {
       {"compression_kind", "snappy"}};
 
   auto session = std::make_shared<connector::hive::HiveConnectorSession>();
+  auto table = metadata->createTable("test", tableType, options, session);
+  auto insertHandle = metadata->beginWrite(
+      *table->layouts()[0], options, WriteKind::kCreate, session);
+  auto handle = std::make_shared<core::InsertTableHandle>(
+      velox::exec::test::kHiveConnectorId, insertHandle);
+  auto resultType =
+      ROW({"numWrittenRows", "fragment", "tableCommitContext"},
+          {BIGINT(), VARBINARY(), VARBINARY()});
 
-  metadata->createTable("test", tableType, options, session, false);
+  auto data = makeRowVector({
+      makeFlatVector<int64_t>(kTestSize, [](auto row) { return row; }),
+      makeFlatVector<int32_t>(kTestSize, [](auto row) { return row % 10; }),
+      makeFlatVector<int64_t>(kTestSize, [](auto row) { return row + 2; }),
+      makeFlatVector<StringView>(
+          kTestSize,
+          [](auto row) { return row % 2 == 0 ? "2022-09-01" : "2025-09-02"; }),
+  });
 
-  auto table = metadata->findTable("test");
-  auto& layouts = table->layouts();
+  auto idGenerator = std::make_shared<core::PlanNodeIdGenerator>();
+  auto builder = exec::test::PlanBuilder(idGenerator).values({data});
+
+  auto plan = std::make_shared<core::TableWriteNode>(
+      idGenerator->next(),
+      builder.planNode()->outputType(),
+      tableType->names(),
+      std::nullopt,
+      handle,
+      false,
+      resultType,
+      velox::connector::CommitStrategy::kNoCommit,
+      builder.planNode());
+  auto result = exec::test::AssertQueryBuilder(plan).copyResults(pool());
+  metadata->finishWrite(
+      *table->layouts()[0],
+      insertHandle,
+      {result},
+      WriteKind::kInsert,
+      session);
+
+  auto readTable = metadata->findTable("test");
+  auto& layouts = readTable->layouts();
   ASSERT_EQ(1, layouts.size());
   auto* layout =
       dynamic_cast<const connector::hive::HiveTableLayout*>(layouts[0]);
@@ -162,41 +198,6 @@ TEST_F(HiveConnectorMetadataTest, createTable) {
 
   EXPECT_EQ(layout->fileFormat(), dwio::common::toFileFormat("parquet"));
   EXPECT_EQ(layout->table().options().at("compression_kind"), "snappy");
-
-  auto data = makeRowVector({
-      makeFlatVector<int64_t>(kTestSize, [](auto row) { return row; }),
-      makeFlatVector<int32_t>(kTestSize, [](auto row) { return row % 10; }),
-      makeFlatVector<int64_t>(kTestSize, [](auto row) { return row + 2; }),
-      makeFlatVector<StringView>(
-          kTestSize,
-          [](auto row) { return row % 2 == 0 ? "2022-09-01" : "2025-09-02"; }),
-  });
-
-  auto connectorHandle = metadata->createInsertTableHandle(
-      *layouts[0], tableType, {}, WriteKind::kInsert, session);
-
-  auto handle = std::make_shared<core::InsertTableHandle>(
-      velox::exec::test::kHiveConnectorId, connectorHandle);
-  auto resultType =
-      ROW({"numWrittenRows", "fragment", "tableCommitContext"},
-          {BIGINT(), VARBINARY(), VARBINARY()});
-
-  auto idGenerator = std::make_shared<core::PlanNodeIdGenerator>();
-  auto builder = exec::test::PlanBuilder(idGenerator).values({data});
-
-  auto plan = std::make_shared<core::TableWriteNode>(
-      idGenerator->next(),
-      builder.planNode()->outputType(),
-      tableType->names(),
-      std::nullopt,
-      handle,
-      false,
-      resultType,
-      velox::connector::CommitStrategy::kNoCommit,
-      builder.planNode());
-  auto result = exec::test::AssertQueryBuilder(plan).copyResults(pool());
-  metadata->finishWrite(
-      *layout, connectorHandle, {result}, WriteKind::kInsert, session);
 
   std::string id = "readQ";
   runner::MultiFragmentPlan::Options runnerOptions = {
