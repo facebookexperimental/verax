@@ -234,13 +234,17 @@ class LocalHiveConnectorMetadata : public HiveConnectorMetadata {
   std::shared_ptr<velox::core::QueryCtx> makeQueryCtx(
       const std::string& queryId);
 
-  void createTable(
+  TablePtr createTable(
       const std::string& tableName,
       const velox::RowTypePtr& rowType,
       const folly::F14FastMap<std::string, std::string>& options,
-      const ConnectorSessionPtr& session,
-      bool errorIfExists = true,
-      TableKind kind = TableKind::kTable) override;
+      const ConnectorSessionPtr& session) override;
+
+  velox::connector::ConnectorInsertTableHandlePtr beginWrite(
+      const TableLayout& layout,
+      const folly::F14FastMap<std::string, std::string>& options,
+      WriteKind kind,
+      const ConnectorSessionPtr& session) override;
 
   void finishWrite(
       const TableLayout& layout,
