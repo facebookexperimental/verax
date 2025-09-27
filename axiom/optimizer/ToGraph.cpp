@@ -32,6 +32,15 @@ namespace {
 
 namespace lp = facebook::axiom::logical_plan;
 
+OrderType toOrderType(lp::SortOrder sort) {
+  if (sort.isAscending()) {
+    return sort.isNullsFirst() ? OrderType::kAscNullsFirst
+                               : OrderType::kAscNullsLast;
+  }
+  return sort.isNullsFirst() ? OrderType::kDescNullsFirst
+                             : OrderType::kDescNullsLast;
+}
+
 /// Trace info to add to exception messages.
 struct ToGraphContext {
   explicit ToGraphContext(const lp::Expr* e) : expr{e} {}
@@ -1020,7 +1029,17 @@ AggregationPlanCP ToGraph::translateAggregation(const lp::AggregateNode& agg) {
     if (aggregate->filter()) {
       condition = translateExpr(aggregate->filter());
     }
-    VELOX_CHECK(aggregate->ordering().empty());
+
+    ExprVector orderKeys;
+    OrderTypeVector orderTypes;
+    orderKeys.reserve(aggregate->ordering().size());
+    orderTypes.reserve(aggregate->ordering().size());
+
+    for (const auto& field : aggregate->ordering()) {
+      auto sort = field.order;
+      orderKeys.push_back(translateExpr(field.expression));
+      orderTypes.push_back(toOrderType(sort));
+    }
 
     auto aggName = toName(aggregate->name());
     auto name = toName(agg.outputNames()[channel]);
@@ -1043,7 +1062,9 @@ AggregationPlanCP ToGraph::translateAggregation(const lp::AggregateNode& agg) {
           funcs,
           aggregate->isDistinct(),
           condition,
-          accumulatorType);
+          accumulatorType,
+          std::move(orderKeys),
+          std::move(orderTypes));
 
       auto* column =
           make<Column>(name, currentDt_, aggregateExpr->value(), name);
@@ -1084,11 +1105,7 @@ PlanObjectP ToGraph::addOrderBy(const lp::SortNode& order) {
     }
     auto sort = field.order;
     deduppedOrderKeys.push_back(key);
-    deduppedOrderTypes.push_back(
-        sort.isAscending() ? (sort.isNullsFirst() ? OrderType::kAscNullsFirst
-                                                  : OrderType::kAscNullsLast)
-                           : (sort.isNullsFirst() ? OrderType::kDescNullsFirst
-                                                  : OrderType::kDescNullsLast));
+    deduppedOrderTypes.push_back(toOrderType(sort));
   }
 
   currentDt_->orderKeys = std::move(deduppedOrderKeys);
