@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <velox/common/base/Exceptions.h>
 #include <iostream>
 #include "axiom/logical_plan/ExprPrinter.h"
 #include "axiom/logical_plan/PlanPrinter.h"
@@ -31,6 +32,15 @@ namespace facebook::axiom::optimizer {
 namespace {
 
 namespace lp = facebook::axiom::logical_plan;
+
+OrderType toOrderType(lp::SortOrder sort) {
+  if (sort.isAscending()) {
+    return sort.isNullsFirst() ? OrderType::kAscNullsFirst
+                               : OrderType::kAscNullsLast;
+  }
+  return sort.isNullsFirst() ? OrderType::kDescNullsFirst
+                             : OrderType::kDescNullsLast;
+}
 
 /// Trace info to add to exception messages.
 struct ToGraphContext {
@@ -938,10 +948,14 @@ struct AggregateDedupKey {
   bool isDistinct;
   ExprCP condition;
   std::span<const ExprCP> args;
+  std::span<const ExprCP> orderKeys;
+  std::span<const OrderType> orderTypes;
 
   bool operator==(const AggregateDedupKey& other) const {
     return func == other.func && isDistinct == other.isDistinct &&
-        condition == other.condition && std::ranges::equal(args, other.args);
+        condition == other.condition && std::ranges::equal(args, other.args) &&
+        std::ranges::equal(orderKeys, other.orderKeys) &&
+        std::ranges::equal(orderTypes, other.orderTypes);
   }
 };
 
@@ -958,6 +972,14 @@ struct AggregateDedupHasher {
 
     for (auto& a : key.args) {
       hash = velox::bits::hashMix(hash, folly::hasher<ExprCP>()(a));
+    }
+
+    for (auto& k : key.orderKeys) {
+      hash = velox::bits::hashMix(hash, folly::hasher<ExprCP>()(k));
+    }
+
+    for (auto& t : key.orderTypes) {
+      hash = velox::bits::hashMix(hash, folly::hasher<OrderType>()(t));
     }
 
     return hash;
@@ -1020,12 +1042,38 @@ AggregationPlanCP ToGraph::translateAggregation(const lp::AggregateNode& agg) {
     if (aggregate->filter()) {
       condition = translateExpr(aggregate->filter());
     }
-    VELOX_CHECK(aggregate->ordering().empty());
+
+    auto [orderKeys, orderTypes] = dedupOrdering(aggregate->ordering());
+
+    if (aggregate->isDistinct() && !orderKeys.empty()) {
+      VELOX_FAIL(
+          "DISTINCT with ORDER BY in same aggregation expression isn't supported yet");
+    }
+
+    if (aggregate->isDistinct()) {
+      const auto& options = queryCtx()->optimization()->runnerOptions();
+      VELOX_CHECK(
+          options.numWorkers == 1 && options.numDrivers == 1,
+          "DISTINCT option for aggregation is supported only in single worker, single thread mode");
+    }
+
+    if (!orderKeys.empty()) {
+      const auto& options = queryCtx()->optimization()->runnerOptions();
+      VELOX_CHECK(
+          options.numWorkers == 1 && options.numDrivers == 1,
+          "ORDER BY option for aggregation is supported only in single worker, single thread mode");
+    }
 
     auto aggName = toName(aggregate->name());
     auto name = toName(agg.outputNames()[channel]);
 
-    AggregateDedupKey key{aggName, aggregate->isDistinct(), condition, args};
+    AggregateDedupKey key{
+        aggName,
+        aggregate->isDistinct(),
+        condition,
+        args,
+        orderKeys,
+        orderTypes};
 
     auto it = uniqueAggregates.try_emplace(key).first;
     if (it->second) {
@@ -1043,7 +1091,9 @@ AggregationPlanCP ToGraph::translateAggregation(const lp::AggregateNode& agg) {
           funcs,
           aggregate->isDistinct(),
           condition,
-          accumulatorType);
+          accumulatorType,
+          std::move(orderKeys),
+          std::move(orderTypes));
 
       auto* column =
           make<Column>(name, currentDt_, aggregateExpr->value(), name);
@@ -1071,25 +1121,8 @@ AggregationPlanCP ToGraph::translateAggregation(const lp::AggregateNode& agg) {
 }
 
 PlanObjectP ToGraph::addOrderBy(const lp::SortNode& order) {
-  ExprVector deduppedOrderKeys;
-  OrderTypeVector deduppedOrderTypes;
-  deduppedOrderKeys.reserve(order.ordering().size());
-  deduppedOrderTypes.reserve(order.ordering().size());
-
-  folly::F14FastSet<ExprCP> uniqueOrderKeys;
-  for (const auto& field : order.ordering()) {
-    auto* key = translateExpr(field.expression);
-    if (!uniqueOrderKeys.emplace(key).second) {
-      continue;
-    }
-    auto sort = field.order;
-    deduppedOrderKeys.push_back(key);
-    deduppedOrderTypes.push_back(
-        sort.isAscending() ? (sort.isNullsFirst() ? OrderType::kAscNullsFirst
-                                                  : OrderType::kAscNullsLast)
-                           : (sort.isNullsFirst() ? OrderType::kDescNullsFirst
-                                                  : OrderType::kDescNullsLast));
-  }
+  auto [deduppedOrderKeys, deduppedOrderTypes] =
+      dedupOrdering(order.ordering());
 
   currentDt_->orderKeys = std::move(deduppedOrderKeys);
   currentDt_->orderTypes = std::move(deduppedOrderTypes);
@@ -1795,6 +1828,26 @@ PlanObjectP ToGraph::makeQueryGraph(
       VELOX_NYI(
           "Unsupported PlanNode {}", lp::NodeKindName::toName(node.kind()));
   }
+}
+
+std::pair<ExprVector, OrderTypeVector> ToGraph::dedupOrdering(
+    const std::vector<lp::SortingField>& ordering) {
+  ExprVector deduppedOrderKeys;
+  OrderTypeVector deduppedOrderTypes;
+  deduppedOrderKeys.reserve(ordering.size());
+  deduppedOrderTypes.reserve(ordering.size());
+
+  folly::F14FastSet<ExprCP> uniqueOrderKeys;
+  for (const auto& field : ordering) {
+    const auto* key = translateExpr(field.expression);
+    if (!uniqueOrderKeys.emplace(key).second) {
+      continue;
+    }
+    deduppedOrderKeys.push_back(key);
+    deduppedOrderTypes.push_back(toOrderType(field.order));
+  }
+
+  return {std::move(deduppedOrderKeys), std::move(deduppedOrderTypes)};
 }
 
 // Debug helper functions. Must be extern to be callable from debugger.

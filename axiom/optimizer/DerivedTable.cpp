@@ -463,6 +463,7 @@ importExpr(ExprCP expr, const ColumnVector& outer, const ExprVector& inner) {
       }
 
       ExprCP newCondition = nullptr;
+      ExprVector newOrderKeys;
       if (expr->is(PlanType::kAggregateExpr)) {
         newCondition =
             importExpr(expr->as<Aggregate>()->condition(), outer, inner);
@@ -470,6 +471,18 @@ importExpr(ExprCP expr, const ColumnVector& outer, const ExprVector& inner) {
 
         if (newCondition && newCondition->isFunction()) {
           functions = functions | newCondition->as<Call>()->functions();
+        }
+
+        const auto* aggregate = expr->as<Aggregate>();
+        newOrderKeys.reserve(aggregate->orderKeys().size());
+        for (const auto& key : aggregate->orderKeys()) {
+          newOrderKeys.push_back(importExpr(key, outer, inner));
+          anyChange |= newOrderKeys.back() != key;
+
+          if (newOrderKeys.back()->isFunction()) {
+            functions =
+                functions | newOrderKeys.back()->as<Call>()->functions();
+          }
         }
       }
 
@@ -492,7 +505,9 @@ importExpr(ExprCP expr, const ColumnVector& outer, const ExprVector& inner) {
             functions,
             aggregate->isDistinct(),
             newCondition,
-            aggregate->intermediateType());
+            aggregate->intermediateType(),
+            std::move(newOrderKeys),
+            aggregate->orderTypes());
       }
     }
       [[fallthrough]];
