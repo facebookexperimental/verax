@@ -168,3 +168,10 @@ add_subdirectory(axiom/logical_plan)
 add_subdirectory(axiom/runner)
 add_subdirectory(axiom/connectors)
 add_subdirectory(axiom/optimizer)
+
+add_library(axiom_mono INTERFACE)
+
+target_link_libraries(
+  axiom_mono
+  INTERFACE axiom_connector_metadata axiom_optimizer axiom_runner_local_runner
+)
